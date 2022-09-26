@@ -29,6 +29,9 @@ impl CityIndex {
     }
 }
 
+// TODO: maybe use a type alias instead?
+// right now this is really unergonomic
+
 // Position of city in the tour. Zero-based.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TourIndex(usize);
@@ -111,6 +114,40 @@ mod tour {
         // From https://tsp-basics.blogspot.com/2017/03/2-opt-move.html
         pub fn make_2_opt_move(&mut self, mut i: TourIndex, j: TourIndex) {
             self.reverse_segment(i.inc(self.cities.len()), j);
+        }
+
+        pub fn ls_2_opt(&mut self) {
+            let mut locally_optimal = false;
+            let mut i: usize;
+            let mut j: usize;
+            let mut counter_2_limit: usize;
+            let mut x1: CityIndex;
+            let mut x2: CityIndex;
+            let mut y1: CityIndex;
+            let mut y2: CityIndex;
+            let len = self.cities.len();
+
+            while !locally_optimal {
+                'outer: for counter_1 in 0..(len - 3) {
+                    i = counter_1;
+                    x1 = self.cities[i];
+                    x2 = self.cities[(i + 1) % len];
+
+                    counter_2_limit = if i == 0 { len - 2 } else { len - 1 };
+
+                    for counter_2 in (i + 2)..counter_2_limit {
+                        j = counter_2;
+                        y1 = self.cities[j];
+                        y2 = self.cities[(j + 1) % len];
+
+                        if self.gain_from_2_opt(x1, x2, y1, y2) > 0 {
+                            self.make_2_opt_move(i, j);
+                            locally_optimal = false;
+                            break 'outer;
+                        }
+                    }
+                }
+            }
         }
     }
 }
