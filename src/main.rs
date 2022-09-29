@@ -65,7 +65,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
     }
 
     pub fn random_as_best(&mut self) {
-        self.best_tour = self.random_tour();
+        self.best_tour = Tour::random(self.number_of_cities(), self.distances(), &mut self.rng);
     }
 
     pub fn number_of_cities(&self) -> usize {
@@ -76,33 +76,6 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         self.problem.distances()
     }
 
-    // This is O(n^2), but I don't know how to optimize it.
-    pub fn random_tour(&mut self) -> Tour {
-        let len = self.number_of_cities();
-
-        let mut cities = Vec::with_capacity(len);
-        let start = self.rng.gen_range(0..len);
-        cities.push(CityIndex::new(start));
-        for idx in 1..len {
-            // Generate indices in unused cities only to avoid duplicates.
-            let index = self.rng.gen_range(0..(len - idx));
-            // Check for unused cities and choose index-th unused city.
-            let mut unused_city_count = 0;
-            for c in 0..len {
-                let city_index = CityIndex(c);
-                if !cities.contains(&city_index) {
-                    if unused_city_count == index {
-                        cities.push(city_index);
-                        break;
-                    }
-                    unused_city_count += 1;
-                }
-            }
-        }
-
-        Tour::from_cities(cities, &self.distances())
-    }
-
     pub fn optimize_tour(&self, tour: &mut Tour) {
         //TODO: add LK limited to 2-opt
     }
@@ -110,4 +83,21 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
     pub fn evolve(&mut self, generations: u32) {
         //TODO: evolution
     }
+}
+
+pub struct TwoOptTspSolver {
+    problem: TspProblem,
+    tour: Tour,
+}
+
+impl TwoOptTspSolver {
+    pub fn new(tsp_problem: TspProblem, random_seed: u64) -> TwoOptTspSolver {
+        // Construct a tour using nearest-neighbour algorithm.
+    }
+}
+
+trait TspSolve {
+    fn new(tsp_problem: TspProblem, random_seed: u64) -> Self;
+
+    fn solve(&mut self) -> Tour;
 }

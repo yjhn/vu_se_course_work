@@ -1,3 +1,5 @@
+use rand::Rng;
+
 use crate::{matrix::SquareMatrix, CityIndex};
 
 // TODO: maybe use a type alias instead?
@@ -48,6 +50,50 @@ impl Tour {
             cities,
             tour_length,
         }
+    }
+
+    // This is O(n^2), but I don't know how to optimize it.
+    pub fn random(city_count: usize, distances: &SquareMatrix<f64>, rng: &mut impl Rng) -> Tour {
+        let mut cities = Vec::with_capacity(city_count);
+        let mut tour_length = 0.0;
+        let start = rng.gen_range(0..city_count);
+        cities.push(CityIndex::new(start));
+
+        for idx in 1..city_count {
+            // Generate indices in unused cities only to avoid duplicates.
+            let index = rng.gen_range(0..(city_count - idx));
+            // Check for unused cities and choose index-th unused city.
+            let mut unused_city_count = 0;
+            for c in 0..city_count {
+                let city_index = CityIndex(c);
+                if !cities.contains(&city_index) {
+                    if unused_city_count == index {
+                        cities.push(city_index);
+                        tour_length += distances[(cities[idx - 1].get(), cities[idx].get())];
+                        break;
+                    }
+                    unused_city_count += 1;
+                }
+            }
+        }
+
+        Tour {
+            cities,
+            tour_length,
+        }
+    }
+
+    pub fn nearest_neighbour(
+        city_count: usize,
+        starting_city: usize,
+        distances: &SquareMatrix<f64>,
+    ) -> Tour {
+        assert!(city_count > starting_city);
+
+        let mut cities = Vec::with_capacity(city_count);
+        cities.push(starting_city);
+
+        todo!()
     }
 
     // From https://tsp-basics.blogspot.com/2017/02/building-blocks-reversing-segment.html
