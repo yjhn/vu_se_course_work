@@ -116,7 +116,7 @@ mod tour {
             self.reverse_segment(i.inc(self.cities.len()), j);
         }
 
-        pub fn ls_2_opt(&mut self) {
+        pub fn ls_2_opt(&mut self, distances: &SquareMatrix<f64>) {
             let mut locally_optimal = false;
             let mut i: usize;
             let mut j: usize;
@@ -140,8 +140,8 @@ mod tour {
                         y1 = self.cities[j];
                         y2 = self.cities[(j + 1) % len];
 
-                        if self.gain_from_2_opt(x1, x2, y1, y2) > 0 {
-                            self.make_2_opt_move(i, j);
+                        if Self::gain_from_2_opt(x1, x2, y1, y2, distances) > 0.0 {
+                            self.make_2_opt_move(TourIndex::new(i), TourIndex::new(j));
                             locally_optimal = false;
                             break 'outer;
                         }
