@@ -1,0 +1,69 @@
+Compile and Rust programs using rsmpi on MIF HPC cluster
+(current OS: Qlustar 12 based on Ubuntu 20.04)
+
+1. Install Rust:
+
+# in user's home dir (/scratch/lustre/home/<username>)
+wget https://sh.rustup.rs -O rustup-init.sh
+chmod +x rustup-init.sh
+./rustup-init.sh --no-modify-path
+
+2. Install stuff for bindgen (needed by rsmpi):
+
+apt-get download libgcc-s1 libllvm12 libclang1-12
+mkdir clang_stuff
+dpkg -x libgcc-s1_10.3.0-1ubuntu1~20.04_amd64.deb clang_stuff
+dpkg -x libllvm12_1%3a12.0.0-3ubuntu1~20.04.5_amd64.deb clang_stuff
+dpkg -x libclang1-12_1%3a12.0.0-3ubuntu1~20.04.5_amd64.deb clang_stuff
+
+3. Compile the project in release mode:
+
+cd <project dir>
+
+module load openmpi
+source "$HOME/.cargo/env"
+C_INCLUDE_PATH=/usr/lib/gcc/x86_64-linux-gnu/9/include"${C_INCLUDE_PATH+:}${C_INCLUDE_PATH-}" LIBCLANG_PATH="/scratch/lustre/home/<username>/clang_stuff/usr/lib/llvm-12/lib" cargo build --release
+
+4. Run the program:
+
+more info here:
+https://mif.vu.lt/itwiki/hpc#paketinis_uzduociu_vykdymas_slurm
+
+# /// file run.sh
+#!/bin/bash
+#SBATCH -p main
+#SBATCH -n4
+module load openmpi
+mpirun <program exec dir (relative path)>
+# ///
+
+chmod +x run.sh
+
+# Enter the instant run environment (not necessary, but otherwise jobs are queued and might run later)
+srun --pty $SHELL
+
+sbatch run.sh
+
+# program output is in file slurm-<JOBID>.out
+
+# if the job was executed in srun --pty $SHELL environment
+exit
+
+5. Stuff
+
+To copy files to the HPC cluster, you need to first copy
+the to MIF computer:
+scp <file> <username>@uosis.mif.vu.lt:Desktop
+or
+scp -r <dir> <username>@uosis.mif.vu.lt:Desktop
+
+then from there copy them to to the cluster:
+scp <file> <username>@hpc:
+
+keep in mind that HPC filesystem is slow, so copy
+minimum amount possible
+
+Connect to hpc:
+
+ssh <username>@uosis.mif.vu.lt
+ssh hpc
