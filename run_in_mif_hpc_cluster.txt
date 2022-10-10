@@ -41,13 +41,13 @@ chmod +x run.sh
 
 # Enter the instant run environment (not necessary, but otherwise jobs are queued and might run later)
 srun --pty $SHELL
+mpirun <program>
+exit
 
+# Alternatively, execute in batch mode.
 sbatch run.sh
 
-# program output is in file slurm-<JOBID>.out
-
-# if the job was executed in srun --pty $SHELL environment
-exit
+# program output will be in file slurm-<JOBID>.out
 
 5. Stuff
 
