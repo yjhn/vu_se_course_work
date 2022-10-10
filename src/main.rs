@@ -65,7 +65,11 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
     }
 
     pub fn random_as_best(&mut self) {
-        self.best_tour = Tour::random(self.number_of_cities(), self.distances(), &mut self.rng);
+        self.best_tour = Tour::random(
+            self.number_of_cities(),
+            self.problem.distances(),
+            &mut self.rng,
+        );
     }
 
     pub fn number_of_cities(&self) -> usize {
@@ -93,6 +97,7 @@ pub struct TwoOptTspSolver {
 impl TwoOptTspSolver {
     pub fn new(tsp_problem: TspProblem, random_seed: u64) -> TwoOptTspSolver {
         // Construct a tour using nearest-neighbour algorithm.
+        todo!()
     }
 }
 
