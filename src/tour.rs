@@ -1,3 +1,5 @@
+use std::{cmp::Ordering, slice::Windows};
+
 use rand::Rng;
 
 use crate::{matrix::SquareMatrix, CityIndex};
@@ -34,6 +36,10 @@ impl Tour {
         cities: Vec::new(),
         tour_length: f64::INFINITY,
     };
+
+    pub fn city_count(&self) -> usize {
+        self.cities.len()
+    }
 
     pub fn from_cities(cities: Vec<CityIndex>, distances: &SquareMatrix<f64>) -> Tour {
         // No empty tours allowed.
@@ -158,7 +164,7 @@ impl Tour {
         }
     }
 
-    fn ls_2_opt_take_best(&mut self, distances: &SquareMatrix<f64>) {
+    pub fn ls_2_opt_take_best(&mut self, distances: &SquareMatrix<f64>) {
         struct TwoOptMove {
             i: TourIndex,
             j: TourIndex,
@@ -202,5 +208,32 @@ impl Tour {
                 break;
             }
         }
+    }
+
+    pub fn has_path(&self, ci1: CityIndex, ci2: CityIndex) -> bool {
+        self.cities.windows(2).any(|indices| {
+            if let [i1, i2] = *indices {
+                (i1 == ci1 && ci2 == i2) || (i1 == ci2 && i2 == ci1)
+            } else {
+                unreachable!()
+            }
+        })
+    }
+
+    pub fn is_shorter_than(&self, other: &Tour) -> bool {
+        self.tour_length < other.tour_length
+    }
+
+    pub fn get_path(&self, i1: TourIndex, i2: TourIndex) -> (CityIndex, CityIndex) {
+        let (i1, i2) = (i1.get(), i2.get());
+        assert!(i2 - i1 == 1 || i2 - i1 == self.cities.len() - 1);
+
+        (self.cities[i1], self.cities[i2])
+    }
+
+    // Returns iterator over all paths except for the
+    // first -> last.
+    pub fn paths(&self) -> Windows<'_, CityIndex> {
+        self.cities.windows(2)
     }
 }
