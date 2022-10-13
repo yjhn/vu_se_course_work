@@ -6,6 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+mpi = { version = "0.6", features = ["derive"] }
 rand = { version = "0.8", features = ["small_rng"] }
-#tspf = {version = "0.3.1", path = "../tspf-rs/"}
-tspf = {version = "0.3.1"}
+tspf = { version = "0.3.1" }
+
+[profile.release]
+debug = true
+lto = true
