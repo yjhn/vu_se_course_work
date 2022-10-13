@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, slice::Windows};
+use std::slice::Windows;
 
 use rand::Rng;
 
@@ -26,6 +26,7 @@ impl TourIndex {
     }
 }
 
+#[derive(Clone)]
 pub struct Tour {
     cities: Vec<CityIndex>,
     tour_length: f64,
@@ -41,9 +42,13 @@ impl Tour {
         self.cities.len()
     }
 
+    pub fn length(&self) -> f64 {
+        self.tour_length
+    }
+
     pub fn from_cities(cities: Vec<CityIndex>, distances: &SquareMatrix<f64>) -> Tour {
         // No empty tours allowed.
-        assert!(cities.len() > 0);
+        assert!(!cities.is_empty());
 
         let mut tour_length = 0.0;
         for idx in 0..(cities.len() - 1) {
@@ -88,7 +93,7 @@ impl Tour {
             tour_length,
         }
     }
-
+    /*
     pub fn nearest_neighbour(
         city_count: usize,
         starting_city: usize,
@@ -100,17 +105,18 @@ impl Tour {
         cities.push(starting_city);
 
         todo!()
-    }
+    }*/
 
     // From https://tsp-basics.blogspot.com/2017/02/building-blocks-reversing-segment.html
-    pub fn reverse_segment(&mut self, start: TourIndex, end: TourIndex) {
+    fn reverse_segment(&mut self, start: TourIndex, end: TourIndex) {
         let mut left = start.get();
         let mut right = end.get();
         let len = self.cities.len();
 
         let inversion_size = ((len + end.get() - start.get() + 1) % len) / 2;
+        assert!(inversion_size >= 1);
 
-        for _ in 1..inversion_size {
+        for _ in 1..=inversion_size {
             self.cities.swap(left, right);
             left = (left + 1) % len;
             right = (len + right - 1) % len;
@@ -118,7 +124,7 @@ impl Tour {
     }
 
     // More is better.
-    pub fn gain_from_2_opt(
+    fn gain_from_2_opt(
         x1: CityIndex,
         x2: CityIndex,
         y1: CityIndex,
@@ -132,22 +138,25 @@ impl Tour {
     }
 
     // From https://tsp-basics.blogspot.com/2017/03/2-opt-move.html
-    pub fn make_2_opt_move(&mut self, mut i: TourIndex, j: TourIndex) {
+    // a..b in Nim is inclusive!!!
+    // https://nim-lang.org/docs/tut1.html#control-flow-statements-for-statement
+    fn make_2_opt_move(&mut self, mut i: TourIndex, j: TourIndex) {
         self.reverse_segment(i.inc(self.cities.len()), j);
     }
 
+    /*
     pub fn ls_2_opt(&mut self, distances: &SquareMatrix<f64>) {
         let mut locally_optimal = false;
         let len = self.cities.len();
 
         while !locally_optimal {
             locally_optimal = true;
-            'outer: for counter_1 in 0..(len - 3) {
+            'outer: for counter_1 in 0..(len - 2) {
                 let i = counter_1;
                 let x1 = self.cities[i];
                 let x2 = self.cities[(i + 1) % len];
 
-                let counter_2_limit = if i == 0 { len - 2 } else { len - 1 };
+                let counter_2_limit = if i == 0 { len - 1 } else { len };
 
                 for counter_2 in (i + 2)..counter_2_limit {
                     let j = counter_2;
@@ -162,9 +171,10 @@ impl Tour {
                 }
             }
         }
-    }
+    }*/
 
     pub fn ls_2_opt_take_best(&mut self, distances: &SquareMatrix<f64>) {
+        #[derive(Debug, Clone, Copy)]
         struct TwoOptMove {
             i: TourIndex,
             j: TourIndex,
@@ -173,16 +183,18 @@ impl Tour {
         let len = self.cities.len();
 
         loop {
+            // println!("reached line {} in {}", line!(), file!());
+
             let mut best_move_gain = 0.0;
             // There might not be any moves that shorten the tour.
             let mut best_move: Option<TwoOptMove> = None;
 
-            for counter_1 in 0..(len - 3) {
+            for counter_1 in 0..(len - 2) {
                 let i = counter_1;
                 let x1 = self.cities[i];
                 let x2 = self.cities[(i + 1) % len];
 
-                let counter_2_limit = if i == 0 { len - 2 } else { len - 1 };
+                let counter_2_limit = if i == 0 { len - 1 } else { len };
 
                 for counter_2 in (i + 2)..counter_2_limit {
                     let j = counter_2;
@@ -210,6 +222,7 @@ impl Tour {
         }
     }
 
+    /*
     pub fn has_path(&self, ci1: CityIndex, ci2: CityIndex) -> bool {
         self.cities.windows(2).any(|indices| {
             if let [i1, i2] = *indices {
@@ -218,7 +231,7 @@ impl Tour {
                 unreachable!()
             }
         })
-    }
+    }*/
 
     pub fn is_shorter_than(&self, other: &Tour) -> bool {
         self.tour_length < other.tour_length
