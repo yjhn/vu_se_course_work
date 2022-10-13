@@ -6,24 +6,41 @@ mod tsp_problem;
 use std::{env, path::Path};
 
 use matrix::SquareMatrix;
+use mpi::{
+    collective::UserOperation,
+    topology::SystemCommunicator,
+    traits::{Communicator, CommunicatorCollectives, Destination, Equivalence, Source},
+};
 use rand::{rngs::SmallRng, Rng, SeedableRng};
-use tour::{Tour, TourIndex};
+use tour::{Length, Tour, TourIndex};
 use tsp_problem::TspProblem;
 
 const TEST_FILE: &str = "test_data/a10.tsp";
 const EVOLUTION_GENERATION_COUNT: u32 = 10;
 const POPULATION_COUNT: u32 = 128;
 const INCREMENT: f64 = 1_f64 / POPULATION_COUNT as f64;
+const EXCHANGE_GENERATIONS: u32 = 4;
+
+const GLOBAL_SEED: u64 = 865376825679;
 
 fn main() {
+    let universe = mpi::initialize().unwrap();
+    let world = universe.world();
+    let size = world.size();
+    let rank = world.rank();
+    println!("World size: {size}");
+
     let path = get_path().unwrap_or_else(|| TEST_FILE.to_owned());
     println!("File path: {path}");
-    let random_seed = rand::random();
+    let random_seed = GLOBAL_SEED + rank as u64; //rand::random();
+    println!("Random seed: {random_seed}");
 
-    let mut solver = TspSolver::<SmallRng>::from_file(path, random_seed);
+    let mut solver = TspSolver::<SmallRng>::from_file(path, random_seed, world);
     println!("Initial tour length: {}", solver.best_tour.length());
 
     solver.evolve(EVOLUTION_GENERATION_COUNT);
+
+    println!("Final tour: {:?}", solver.best_tour);
 }
 
 fn get_path() -> Option<String> {
@@ -34,7 +51,7 @@ fn get_path() -> Option<String> {
 }
 
 // Position of city in all cities. Zero-based.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Equivalence)]
 pub struct CityIndex(usize);
 
 impl CityIndex {
@@ -54,15 +71,24 @@ pub struct TspSolver<R: Rng + SeedableRng> {
     best_tour: Tour,
     current_generation: u32,
     rng: R,
+    mpi: SystemCommunicator,
 }
 
 impl<R: Rng + SeedableRng> TspSolver<R> {
-    pub fn from_file(path: impl AsRef<Path>, random_seed: u64) -> TspSolver<R> {
+    pub fn from_file(
+        path: impl AsRef<Path>,
+        random_seed: u64,
+        mpi: SystemCommunicator,
+    ) -> TspSolver<R> {
         let problem = TspProblem::from_file(path);
-        Self::from_tsp_problem(problem, random_seed)
+        Self::from_tsp_problem(problem, random_seed, mpi)
     }
 
-    pub fn from_tsp_problem(problem: TspProblem, random_seed: u64) -> TspSolver<R> {
+    pub fn from_tsp_problem(
+        problem: TspProblem,
+        random_seed: u64,
+        mpi: SystemCommunicator,
+    ) -> TspSolver<R> {
         let mut probability_matrix = SquareMatrix::new(problem.number_of_cities(), 0.0);
         let mut rng = R::seed_from_u64(random_seed);
         let mut best_tour = Tour::PLACEHOLDER;
@@ -90,6 +116,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
             best_tour,
             current_generation: 0,
             rng,
+            mpi,
         }
     }
 
@@ -110,33 +137,65 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
     }
 
     pub fn evolve(&mut self, generations: u32) {
-        for _ in 0..generations {
+        for gen in 0..generations {
             self.current_generation += 1;
 
-            let loser = self.gen_tour_from_prob_matrix();
-            let mut winner = loser.clone();
-            // println!("reached line {} in {}", line!(), file!());
+            self.evolve_inner();
+            if gen % EXCHANGE_GENERATIONS == 0 {
+                // Exchange best tours.
+                // for now don't exchange tour length
+                // length could be transmuted into usize and added at the end
+                let mpi_closure = UserOperation::commutative(|read_buf, write_buf| {
+                    println!("Exchanging global tours");
 
-            winner.ls_2_opt_take_best(self.distances());
+                    let local_best = read_buf.downcast::<CityIndex>().unwrap();
+                    let global_best = write_buf.downcast::<CityIndex>().unwrap();
 
-            // Increase probs of all paths taken by the winner and
-            // decrease probs of all paths taken by the loser.
-            Self::update_probabilitities::<true>(&mut self.probability_matrix, &winner);
-            Self::update_probabilitities::<false>(&mut self.probability_matrix, &loser);
-            if winner.is_shorter_than(&self.best_tour) {
-                self.best_tour = winner;
-                println!(
-                    "New best tour length in generation {}: {}",
-                    self.current_generation,
-                    self.best_tour.length()
-                );
-            } else {
-                println!(
-                    "Generation {} did not improve best tour, winner length: {}",
-                    self.current_generation,
-                    winner.length()
+                    // TODO: use hack with f64 transmuting to usize to speed this up.
+                    let local_tour_length = local_best.tour_length(&mut self.problem.distances());
+                    let global_tour_length = global_best.tour_length(&self.problem.distances());
+
+                    if local_tour_length < global_tour_length {
+                        global_best.copy_from_slice(local_best);
+                    }
+                });
+
+                let mut best_global_tour: Vec<CityIndex> =
+                    Vec::with_capacity(self.number_of_cities());
+
+                self.mpi.all_reduce_into(
+                    self.best_tour.cities(),
+                    &mut best_global_tour,
+                    &mpi_closure,
                 );
             }
+        }
+    }
+
+    fn evolve_inner(&mut self) {
+        let loser = self.gen_tour_from_prob_matrix();
+        let mut winner = loser.clone();
+        // println!("reached line {} in {}", line!(), file!());
+
+        winner.ls_2_opt_take_best(self.distances());
+
+        // Increase probs of all paths taken by the winner and
+        // decrease probs of all paths taken by the loser.
+        Self::update_probabilitities::<true>(&mut self.probability_matrix, &winner);
+        Self::update_probabilitities::<false>(&mut self.probability_matrix, &loser);
+        if winner.is_shorter_than(&self.best_tour) {
+            self.best_tour = winner;
+            println!(
+                "New best tour length in generation {}: {}",
+                self.current_generation,
+                self.best_tour.length()
+            );
+        } else {
+            println!(
+                "Generation {} did not improve best tour, winner length: {}",
+                self.current_generation,
+                winner.length()
+            );
         }
     }
 

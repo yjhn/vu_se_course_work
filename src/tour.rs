@@ -1,5 +1,6 @@
-use std::slice::Windows;
+use std::{mem, slice::Windows};
 
+use mpi::traits::Equivalence;
 use rand::Rng;
 
 use crate::{matrix::SquareMatrix, CityIndex};
@@ -26,7 +27,7 @@ impl TourIndex {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Tour {
     cities: Vec<CityIndex>,
     tour_length: f64,
@@ -47,15 +48,7 @@ impl Tour {
     }
 
     pub fn from_cities(cities: Vec<CityIndex>, distances: &SquareMatrix<f64>) -> Tour {
-        // No empty tours allowed.
-        assert!(!cities.is_empty());
-
-        let mut tour_length = 0.0;
-        for idx in 0..(cities.len() - 1) {
-            tour_length += distances[(cities[idx].get(), cities[idx + 1].get())];
-        }
-        // Add distance from last to first.
-        tour_length += distances[(cities.last().unwrap().get(), cities[0].get())];
+        let tour_length = cities.tour_length(distances);
 
         Tour {
             cities,
@@ -63,7 +56,7 @@ impl Tour {
         }
     }
 
-    // This is O(n^2), but I don't know how to optimize it.
+    // TODO: use rand::shuffle.
     pub fn random(city_count: usize, distances: &SquareMatrix<f64>, rng: &mut impl Rng) -> Tour {
         let mut cities = Vec::with_capacity(city_count);
         let mut tour_length = 0.0;
@@ -248,5 +241,28 @@ impl Tour {
     // first -> last.
     pub fn paths(&self) -> Windows<'_, CityIndex> {
         self.cities.windows(2)
+    }
+
+    pub fn cities(&self) -> &[CityIndex] {
+        &self.cities
+    }
+}
+
+pub trait Length {
+    fn tour_length(&self, distances: &SquareMatrix<f64>) -> f64;
+}
+
+impl Length for [CityIndex] {
+    fn tour_length(&self, distances: &SquareMatrix<f64>) -> f64 {
+        assert!(!self.len() > 1);
+
+        let mut tour_length = 0.0;
+        for idx in 0..(self.len() - 1) {
+            tour_length += distances[(self[idx].get(), self[idx + 1].get())];
+        }
+        // Add distance from last to first.
+        tour_length += distances[(self.last().unwrap().get(), self[0].get())];
+
+        tour_length
     }
 }
