@@ -1,6 +1,6 @@
-use std::{mem, slice::Windows};
+use std::{slice::Windows};
 
-use mpi::traits::Equivalence;
+
 use rand::Rng;
 
 use crate::{matrix::SquareMatrix, CityIndex};
@@ -21,8 +21,8 @@ impl TourIndex {
         self.0
     }
 
-    pub fn inc(&mut self, size: usize) -> TourIndex {
-        self.0 = (self.0 + 1) % size;
+    pub fn inc_mod(&mut self, max_size: usize) -> TourIndex {
+        self.0 = (self.0 + 1) % max_size;
         *self
     }
 }
@@ -48,7 +48,7 @@ impl Tour {
     }
 
     pub fn from_cities(cities: Vec<CityIndex>, distances: &SquareMatrix<f64>) -> Tour {
-        let tour_length = cities.tour_length(distances);
+        let tour_length = cities.calculate_tour_length(distances);
 
         Tour {
             cities,
@@ -73,13 +73,16 @@ impl Tour {
                 if !cities.contains(&city_index) {
                     if unused_city_count == index {
                         cities.push(city_index);
-                        tour_length += distances[(cities[idx - 1].get(), cities[idx].get())];
+                        tour_length += distances[(cities[idx - 1].get(), c)];
                         break;
                     }
                     unused_city_count += 1;
                 }
             }
         }
+        // Add last to first link length.
+        tour_length += distances[(cities.last().unwrap().get(), start)];
+        assert_eq!(tour_length, cities.calculate_tour_length(distances));
 
         Tour {
             cities,
@@ -106,7 +109,7 @@ impl Tour {
         let mut right = end.get();
         let len = self.cities.len();
 
-        let inversion_size = ((len + end.get() - start.get() + 1) % len) / 2;
+        let inversion_size = ((len + right - left + 1) % len) / 2;
         assert!(inversion_size >= 1);
 
         for _ in 1..=inversion_size {
@@ -124,8 +127,10 @@ impl Tour {
         y2: CityIndex,
         distances: &SquareMatrix<f64>,
     ) -> f64 {
-        let del_length = distances[(x1.get(), x2.get())] + distances[(y1.get(), y2.get())];
-        let add_length = distances[(x1.get(), y1.get())] + distances[(x2.get(), y2.get())];
+        let (x1, x2, y1, y2) = (x1.get(), x2.get(), y1.get(), y2.get());
+
+        let del_length = distances[(x1, x2)] + distances[(y1, y2)];
+        let add_length = distances[(x1, y1)] + distances[(x2, y2)];
 
         del_length - add_length
     }
@@ -133,8 +138,10 @@ impl Tour {
     // From https://tsp-basics.blogspot.com/2017/03/2-opt-move.html
     // a..b in Nim is inclusive!!!
     // https://nim-lang.org/docs/tut1.html#control-flow-statements-for-statement
-    fn make_2_opt_move(&mut self, mut i: TourIndex, j: TourIndex) {
-        self.reverse_segment(i.inc(self.cities.len()), j);
+    fn make_2_opt_move(&mut self, mut i: TourIndex, j: TourIndex, move_gain: f64) {
+        self.reverse_segment(i.inc_mod(self.cities.len()), j);
+        // This is not perfectly accurate, but will be good enough.
+        self.tour_length -= move_gain;
     }
 
     /*
@@ -176,21 +183,17 @@ impl Tour {
         let len = self.cities.len();
 
         loop {
-            // println!("reached line {} in {}", line!(), file!());
-
             let mut best_move_gain = 0.0;
             // There might not be any moves that shorten the tour.
             let mut best_move: Option<TwoOptMove> = None;
 
-            for counter_1 in 0..(len - 2) {
-                let i = counter_1;
+            for i in 0..(len - 2) {
                 let x1 = self.cities[i];
                 let x2 = self.cities[(i + 1) % len];
 
                 let counter_2_limit = if i == 0 { len - 1 } else { len };
 
-                for counter_2 in (i + 2)..counter_2_limit {
-                    let j = counter_2;
+                for j in (i + 2)..counter_2_limit {
                     let y1 = self.cities[j];
                     let y2 = self.cities[(j + 1) % len];
 
@@ -207,7 +210,7 @@ impl Tour {
 
             // If there is any move that shortens the tour, make it.
             if let Some(move2) = best_move {
-                self.make_2_opt_move(move2.i, move2.j);
+                self.make_2_opt_move(move2.i, move2.j, best_move_gain);
             } else {
                 // There are no moves that shorten the tour.
                 break;
@@ -249,12 +252,12 @@ impl Tour {
 }
 
 pub trait Length {
-    fn tour_length(&self, distances: &SquareMatrix<f64>) -> f64;
+    fn calculate_tour_length(&self, distances: &SquareMatrix<f64>) -> f64;
 }
 
 impl Length for [CityIndex] {
-    fn tour_length(&self, distances: &SquareMatrix<f64>) -> f64 {
-        assert!(!self.len() > 1);
+    fn calculate_tour_length(&self, distances: &SquareMatrix<f64>) -> f64 {
+        assert!(self.len() > 1);
 
         let mut tour_length = 0.0;
         for idx in 0..(self.len() - 1) {

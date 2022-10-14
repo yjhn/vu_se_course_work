@@ -9,7 +9,7 @@ use matrix::SquareMatrix;
 use mpi::{
     collective::UserOperation,
     topology::SystemCommunicator,
-    traits::{Communicator, CommunicatorCollectives, Destination, Equivalence, Source},
+    traits::{Communicator, CommunicatorCollectives, Equivalence},
 };
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use tour::{Length, Tour, TourIndex};
@@ -40,7 +40,7 @@ fn main() {
 
     solver.evolve(EVOLUTION_GENERATION_COUNT);
 
-    println!("Final tour: {:?}", solver.best_tour);
+    println!("Final tour length: {}", solver.best_tour.length());
 }
 
 fn get_path() -> Option<String> {
@@ -98,10 +98,8 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         for _ in 0..POPULATION_COUNT {
             let mut opt_tour =
                 Tour::random(problem.number_of_cities(), problem.distances(), &mut rng);
-            // println!("reached line: {}", line!());
 
             opt_tour.ls_2_opt_take_best(problem.distances());
-            // println!("reached line: {}", line!());
 
             Self::update_probabilitities::<true>(&mut probability_matrix, &opt_tour);
 
@@ -142,40 +140,61 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
             self.evolve_inner();
             if gen % EXCHANGE_GENERATIONS == 0 {
-                // Exchange best tours.
-                // for now don't exchange tour length
-                // length could be transmuted into usize and added at the end
-                let mpi_closure = UserOperation::commutative(|read_buf, write_buf| {
-                    println!("Exchanging global tours");
-
-                    let local_best = read_buf.downcast::<CityIndex>().unwrap();
-                    let global_best = write_buf.downcast::<CityIndex>().unwrap();
-
-                    // TODO: use hack with f64 transmuting to usize to speed this up.
-                    let local_tour_length = local_best.tour_length(&mut self.problem.distances());
-                    let global_tour_length = global_best.tour_length(&self.problem.distances());
-
-                    if local_tour_length < global_tour_length {
-                        global_best.copy_from_slice(local_best);
-                    }
-                });
-
-                let mut best_global_tour: Vec<CityIndex> =
-                    Vec::with_capacity(self.number_of_cities());
-
-                self.mpi.all_reduce_into(
-                    self.best_tour.cities(),
-                    &mut best_global_tour,
-                    &mpi_closure,
-                );
+                self.exchange_best_tours();
             }
         }
+    }
+
+    fn exchange_best_tours(&mut self) {
+        let global_best_vec = self.exchange_inner();
+        assert_eq!(global_best_vec.len(), self.best_tour.city_count());
+
+        let global_best = Tour::from_cities(global_best_vec, self.distances());
+
+        // Update the probability matrix if the global best tour is
+        // shorter than local best tour (one process will have its tour
+        // chosen as the global best tour).
+        if global_best.is_shorter_than(&self.best_tour) {
+            Self::update_probabilitities::<false>(&mut self.probability_matrix, &self.best_tour);
+            Self::update_probabilitities::<true>(&mut self.probability_matrix, &global_best);
+        }
+
+        // TODO: maybe it's worth it to also update our local best tour?
+        // The paper doesn't do it for some reason.
+    }
+
+    fn exchange_inner(&mut self) -> Vec<CityIndex> {
+        // Exchange best tours.
+        // for now don't exchange tour length
+        // length could be transmuted into usize and added at the end
+        let mpi_closure = UserOperation::commutative(|read_buf, write_buf| {
+            println!("Exchanging global tours");
+
+            let local_best = read_buf.downcast::<CityIndex>().unwrap();
+            let global_best = write_buf.downcast::<CityIndex>().unwrap();
+
+            // TODO: use hack with tour length transmuting to usize to speed this up.
+            let local_tour_length = local_best.calculate_tour_length(&mut self.problem.distances());
+            let global_tour_length = global_best.calculate_tour_length(&self.problem.distances());
+            println!("GBTL: {global_tour_length}, LBTL: {local_tour_length}");
+
+            if local_tour_length < global_tour_length {
+                global_best.copy_from_slice(local_best);
+            }
+        });
+
+        // This needs to be filled up upfront.
+        let mut best_global_tour: Vec<CityIndex> = self.best_tour.cities().to_owned();
+
+        self.mpi
+            .all_reduce_into(self.best_tour.cities(), &mut best_global_tour, &mpi_closure);
+
+        best_global_tour
     }
 
     fn evolve_inner(&mut self) {
         let loser = self.gen_tour_from_prob_matrix();
         let mut winner = loser.clone();
-        // println!("reached line {} in {}", line!(), file!());
 
         winner.ls_2_opt_take_best(self.distances());
 
@@ -212,7 +231,6 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
         'outermost: while cities_left > 0 {
             let last: usize = cities.last().unwrap().get();
-            // println!("reached line {} in {}", line!(), file!());
 
             // Allow trying to insert the city `cities_left` times, then,
             // if still unsuccessful, insert the city with highest probability.
