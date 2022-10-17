@@ -1,4 +1,6 @@
-use std::slice::Windows;
+use std::fmt::Display;
+use std::io::Write;
+use std::{fs::File, io::BufWriter, path::Path, slice::Windows};
 
 use rand::Rng;
 
@@ -57,6 +59,8 @@ impl Tour {
 
     // TODO: use rand::shuffle.
     pub fn random(city_count: usize, distances: &SquareMatrix<f64>, rng: &mut impl Rng) -> Tour {
+        assert!(city_count > 1);
+
         let mut cities = Vec::with_capacity(city_count);
         let mut tour_length = 0.0;
         let start = rng.gen_range(0..city_count);
@@ -225,6 +229,27 @@ impl Tour {
 
     pub fn cities(&self) -> &[CityIndex] {
         &self.cities
+    }
+
+    pub fn save_to_file<P: AsRef<Path>, Dp: AsRef<Path> + Display>(
+        &self,
+        problem_path: Dp,
+        path: P,
+    ) {
+        let file = File::create(path).unwrap();
+        let mut file = BufWriter::new(file);
+
+        writeln!(file, "Problem file: {problem_path}").unwrap();
+        writeln!(file, "Number of cities: {}", self.city_count()).unwrap();
+        writeln!(file, "Tour length: {}", self.tour_length).unwrap();
+        writeln!(file, "Cities:").unwrap();
+
+        // Use indices starting at 1 for output, same as TSPLIB
+        // format for consistency.
+        for city in &self.cities {
+            write!(file, "{} ", city.get() + 1).unwrap();
+        }
+        writeln!(file).unwrap();
     }
 }
 

@@ -20,6 +20,7 @@ const EVOLUTION_GENERATION_COUNT: u32 = 10;
 const POPULATION_COUNT: u32 = 8;
 const INCREMENT: f64 = 1_f64 / POPULATION_COUNT as f64;
 const EXCHANGE_GENERATIONS: u32 = 4;
+const SOLUTION_FILE_NAME: &str = "solution.tsps";
 
 const GLOBAL_SEED: u64 = 865376825679;
 const USE_HARDCODED_SEED: bool = false;
@@ -38,11 +39,6 @@ fn main() {
         println!("World size: {size}");
     }
 
-    let path = get_path().unwrap_or_else(|| TEST_FILE.to_owned());
-    if is_root {
-        println!("File path: {path}");
-    }
-
     // Broadcast global random seed.
     let mut global_seed_buf = if is_root {
         if USE_HARDCODED_SEED {
@@ -59,7 +55,12 @@ fn main() {
         println!("Global random seed: {random_seed}");
     }
 
-    let mut solver = TspSolver::<SmallRng>::from_file(path, random_seed, world);
+    let path = get_path().unwrap_or_else(|| TEST_FILE.to_owned());
+    if is_root {
+        println!("File path: {path}");
+    }
+
+    let mut solver = TspSolver::<SmallRng>::from_file(path.clone(), random_seed, world);
     println!("Initial tour length: {}", solver.best_tour.length());
 
     solver.evolve(EVOLUTION_GENERATION_COUNT);
@@ -68,9 +69,15 @@ fn main() {
         "Final tour length (for process at rank {rank}): {}",
         solver.best_tour.length()
     );
+
+    // This must be executed by all processes.
+    let best_global = solver.best_global_tour();
+
     // Root process outputs the results.
     if is_root {
-        // TODO: output results
+        println!("Best global tour length: {}", best_global.length());
+        best_global.save_to_file(path, SOLUTION_FILE_NAME);
+        println!("Best tour saved to file {SOLUTION_FILE_NAME}");
     }
 }
 
@@ -177,10 +184,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
     }
 
     fn exchange_best_tours(&mut self) {
-        let global_best_vec = self.exchange_inner();
-        assert_eq!(global_best_vec.len(), self.best_tour.city_count());
-
-        let global_best = Tour::from_cities(global_best_vec, self.distances());
+        let global_best = self.best_global_tour();
 
         // Update the probability matrix if the global best tour is
         // shorter than local best tour (one process will have its tour
@@ -194,18 +198,19 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         // The paper doesn't do it for some reason.
     }
 
-    fn exchange_inner(&mut self) -> Vec<CityIndex> {
+    fn exchange_tours(&self) -> Vec<CityIndex> {
         // Exchange best tours.
         // for now don't exchange tour length
         // length could be transmuted into usize and added at the end
         // let rank = self.mpi.rank();
+        let distances = self.problem.distances();
         let mpi_closure = UserOperation::commutative(|read_buf, write_buf| {
             let local_best = read_buf.downcast::<CityIndex>().unwrap();
             let global_best = write_buf.downcast::<CityIndex>().unwrap();
 
             // TODO: use hack with tour length transmuting to usize to speed this up.
-            let local_tour_length = local_best.calculate_tour_length(&mut self.problem.distances());
-            let global_tour_length = global_best.calculate_tour_length(&self.problem.distances());
+            let local_tour_length = local_best.calculate_tour_length(distances);
+            let global_tour_length = global_best.calculate_tour_length(distances);
 
             // println!("Exchanging global tours, at rank {rank}. GBTL: {global_tour_length}, LBTL: {local_tour_length}");
 
@@ -213,6 +218,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                 global_best.copy_from_slice(local_best);
             }
         });
+        // println!("reached line {} in {}", line!(), file!());
 
         // This needs to be filled up before exchanging.
         let mut best_global_tour: Vec<CityIndex> = self.best_tour.cities().to_owned();
@@ -355,5 +361,11 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         }
         // All values in probability matrix must always be in range [0..1].
         prob_matrix[(h, l)] = f64::clamp(prob_matrix[(h, l)], 0.0, 1.0)
+    }
+
+    pub fn best_global_tour(&self) -> Tour {
+        let best_global_tour_vec = self.exchange_tours();
+
+        Tour::from_cities(best_global_tour_vec, &self.distances())
     }
 }
