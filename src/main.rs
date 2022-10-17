@@ -23,6 +23,8 @@ const EXCHANGE_GENERATIONS: u32 = 4;
 
 const GLOBAL_SEED: u64 = 865376825679;
 
+// Build and run:
+// cargo build --release && RUST_BACKTRACE=1  mpirun --mca opal_warn_on_missing_libcuda 0 target/release/salesman test_data/a280.tsp
 fn main() {
     let universe = mpi::initialize().unwrap();
     let world = universe.world();
@@ -93,7 +95,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         let mut rng = R::seed_from_u64(random_seed);
         let mut best_tour = Tour::PLACEHOLDER;
 
-        // Generate POPULATION_COUNT random cities, optimize them and
+        // Generate POPULATION_COUNT random tours, optimize them and
         // update the prob matrix accordingly.
         for _ in 0..POPULATION_COUNT {
             let mut opt_tour =
@@ -299,19 +301,6 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         }
     }
 
-    // Kinda useless, since this is not used in the paper it seems.
-    // pub fn update_probabilities(&mut self, t1: &Tour, t2: &Tour) {
-    //     // Update each path to have higher probability if
-    //     // the winner has it and lower otherwise.
-    //     if t1.is_shorter_than(t2) {
-    //         self.update_probabilitities::<true>(t1);
-    //         self.update_probabilitities::<false>(t2);
-    //     } else {
-    //         self.update_probabilitities::<true>(t2);
-    //         self.update_probabilitities::<false>(t1);
-    //     }
-    // }
-
     fn update_probabilitities<const INC: bool>(prob_matrix: &mut SquareMatrix<f64>, t: &Tour) {
         for path in t.paths() {
             if let [c1, c2] = *path {
@@ -338,23 +327,3 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         prob_matrix[(h, l)] = f64::clamp(prob_matrix[(h, l)], 0.0, 1.0)
     }
 }
-
-/*
-pub struct TwoOptTspSolver {
-    problem: TspProblem,
-    tour: Tour,
-}
-
-impl TwoOptTspSolver {
-    pub fn new(tsp_problem: TspProblem, random_seed: u64) -> TwoOptTspSolver {
-        // Construct a tour using nearest-neighbour algorithm.
-        todo!()
-    }
-}
-
-trait TspSolve {
-    fn new(tsp_problem: TspProblem, random_seed: u64) -> Self;
-
-    fn solve(&mut self) -> Tour;
-}
-*/

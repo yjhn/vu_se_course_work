@@ -1,5 +1,4 @@
-use std::{slice::Windows};
-
+use std::slice::Windows;
 
 use rand::Rng;
 
@@ -89,19 +88,6 @@ impl Tour {
             tour_length,
         }
     }
-    /*
-    pub fn nearest_neighbour(
-        city_count: usize,
-        starting_city: usize,
-        distances: &SquareMatrix<f64>,
-    ) -> Tour {
-        assert!(city_count > starting_city);
-
-        let mut cities = Vec::with_capacity(city_count);
-        cities.push(starting_city);
-
-        todo!()
-    }*/
 
     // From https://tsp-basics.blogspot.com/2017/02/building-blocks-reversing-segment.html
     fn reverse_segment(&mut self, start: TourIndex, end: TourIndex) {
@@ -173,6 +159,8 @@ impl Tour {
         }
     }*/
 
+    // Make 2-opt moves until no improvements can be made.
+    // Choose the best possible move each time.
     pub fn ls_2_opt_take_best(&mut self, distances: &SquareMatrix<f64>) {
         #[derive(Debug, Clone, Copy)]
         struct TwoOptMove {
@@ -217,17 +205,6 @@ impl Tour {
             }
         }
     }
-
-    /*
-    pub fn has_path(&self, ci1: CityIndex, ci2: CityIndex) -> bool {
-        self.cities.windows(2).any(|indices| {
-            if let [i1, i2] = *indices {
-                (i1 == ci1 && ci2 == i2) || (i1 == ci2 && i2 == ci1)
-            } else {
-                unreachable!()
-            }
-        })
-    }*/
 
     pub fn is_shorter_than(&self, other: &Tour) -> bool {
         self.tour_length < other.tour_length
