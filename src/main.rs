@@ -9,7 +9,7 @@ use matrix::SquareMatrix;
 use mpi::{
     collective::UserOperation,
     topology::SystemCommunicator,
-    traits::{Communicator, CommunicatorCollectives, Equivalence},
+    traits::{Communicator, CommunicatorCollectives, Equivalence, Root},
 };
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use tour::{Length, Tour, TourIndex};
@@ -17,11 +17,12 @@ use tsp_problem::TspProblem;
 
 const TEST_FILE: &str = "test_data/a10.tsp";
 const EVOLUTION_GENERATION_COUNT: u32 = 10;
-const POPULATION_COUNT: u32 = 128;
+const POPULATION_COUNT: u32 = 8;
 const INCREMENT: f64 = 1_f64 / POPULATION_COUNT as f64;
 const EXCHANGE_GENERATIONS: u32 = 4;
 
 const GLOBAL_SEED: u64 = 865376825679;
+const USE_HARDCODED_SEED: bool = false;
 
 // Build and run:
 // cargo build --release && RUST_BACKTRACE=1  mpirun --mca opal_warn_on_missing_libcuda 0 target/release/salesman test_data/a280.tsp
@@ -30,19 +31,47 @@ fn main() {
     let world = universe.world();
     let size = world.size();
     let rank = world.rank();
-    println!("World size: {size}");
+    let root_rank = 0;
+    let root_process = world.process_at_rank(root_rank);
+    let is_root = rank == root_rank;
+    if is_root {
+        println!("World size: {size}");
+    }
 
     let path = get_path().unwrap_or_else(|| TEST_FILE.to_owned());
-    println!("File path: {path}");
-    let random_seed = GLOBAL_SEED + rank as u64; //rand::random();
-    println!("Random seed: {random_seed}");
+    if is_root {
+        println!("File path: {path}");
+    }
+
+    // Broadcast global random seed.
+    let mut global_seed_buf = if is_root {
+        if USE_HARDCODED_SEED {
+            [GLOBAL_SEED]
+        } else {
+            [rand::random()]
+        }
+    } else {
+        [0]
+    };
+    root_process.broadcast_into(&mut global_seed_buf);
+    let random_seed = global_seed_buf[0] + rank as u64;
+    if is_root {
+        println!("Global random seed: {random_seed}");
+    }
 
     let mut solver = TspSolver::<SmallRng>::from_file(path, random_seed, world);
     println!("Initial tour length: {}", solver.best_tour.length());
 
     solver.evolve(EVOLUTION_GENERATION_COUNT);
 
-    println!("Final tour length: {}", solver.best_tour.length());
+    println!(
+        "Final tour length (for process at rank {rank}): {}",
+        solver.best_tour.length()
+    );
+    // Root process outputs the results.
+    if is_root {
+        // TODO: output results
+    }
 }
 
 fn get_path() -> Option<String> {
@@ -169,23 +198,23 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         // Exchange best tours.
         // for now don't exchange tour length
         // length could be transmuted into usize and added at the end
+        // let rank = self.mpi.rank();
         let mpi_closure = UserOperation::commutative(|read_buf, write_buf| {
-            println!("Exchanging global tours");
-
             let local_best = read_buf.downcast::<CityIndex>().unwrap();
             let global_best = write_buf.downcast::<CityIndex>().unwrap();
 
             // TODO: use hack with tour length transmuting to usize to speed this up.
             let local_tour_length = local_best.calculate_tour_length(&mut self.problem.distances());
             let global_tour_length = global_best.calculate_tour_length(&self.problem.distances());
-            println!("GBTL: {global_tour_length}, LBTL: {local_tour_length}");
+
+            // println!("Exchanging global tours, at rank {rank}. GBTL: {global_tour_length}, LBTL: {local_tour_length}");
 
             if local_tour_length < global_tour_length {
                 global_best.copy_from_slice(local_best);
             }
         });
 
-        // This needs to be filled up upfront.
+        // This needs to be filled up before exchanging.
         let mut best_global_tour: Vec<CityIndex> = self.best_tour.cities().to_owned();
 
         self.mpi
@@ -212,11 +241,12 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                 self.best_tour.length()
             );
         } else {
-            println!(
-                "Generation {} did not improve best tour, winner length: {}",
-                self.current_generation,
-                winner.length()
-            );
+            // println!(
+            //     "Generation {} did not improve best tour, winner length: {}, best tour length: {}",
+            //     self.current_generation,
+            //     winner.length(),
+            //     self.best_tour.length()
+            // );
         }
     }
 
