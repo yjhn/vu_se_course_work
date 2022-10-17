@@ -25,7 +25,7 @@ const SOLUTION_FILE_NAME: &str = "solution.tsps";
 const GLOBAL_SEED: u64 = 865376825679;
 const USE_HARDCODED_SEED: bool = false;
 
-// Build and run:
+// Build and run locally:
 // cargo build --release && RUST_BACKTRACE=1  mpirun --mca opal_warn_on_missing_libcuda 0 target/release/salesman test_data/a280.tsp
 fn main() {
     let universe = mpi::initialize().unwrap();
@@ -246,13 +246,6 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                 self.current_generation,
                 self.best_tour.length()
             );
-        } else {
-            // println!(
-            //     "Generation {} did not improve best tour, winner length: {}, best tour length: {}",
-            //     self.current_generation,
-            //     winner.length(),
-            //     self.best_tour.length()
-            // );
         }
     }
 

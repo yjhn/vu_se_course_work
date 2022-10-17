@@ -6,9 +6,6 @@ use rand::Rng;
 
 use crate::{matrix::SquareMatrix, CityIndex};
 
-// TODO: maybe use a type alias instead?
-// right now this is really unergonomic
-
 // Position of city in the tour. Zero-based.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TourIndex(usize);
