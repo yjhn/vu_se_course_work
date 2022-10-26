@@ -21,12 +21,15 @@ const POPULATION_COUNT: u32 = 8;
 const INCREMENT: f64 = 1_f64 / POPULATION_COUNT as f64;
 const EXCHANGE_GENERATIONS: u32 = 4;
 const SOLUTION_FILE_NAME: &str = "solution.tsps";
+type RNG = SmallRng;
 
 const GLOBAL_SEED: u64 = 865376825679;
 const USE_HARDCODED_SEED: bool = false;
 
 // Build and run locally:
 // cargo build --release && RUST_BACKTRACE=1  mpirun --mca opal_warn_on_missing_libcuda 0 target/release/salesman test_data/a280.tsp
+
+// TODO: set up ssh keys to directly connect to hpc
 fn main() {
     let universe = mpi::initialize().unwrap();
     let world = universe.world();
@@ -60,7 +63,7 @@ fn main() {
         println!("File path: {path}");
     }
 
-    let mut solver = TspSolver::<SmallRng>::from_file(path.clone(), random_seed, world);
+    let mut solver = TspSolver::<RNG>::from_file(path.clone(), random_seed, world);
     println!("Initial tour length: {}", solver.best_tour.length());
 
     solver.evolve(EVOLUTION_GENERATION_COUNT);
@@ -137,7 +140,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
             let mut opt_tour =
                 Tour::random(problem.number_of_cities(), problem.distances(), &mut rng);
 
-            opt_tour.ls_2_opt_take_best(problem.distances());
+            opt_tour.two_opt_take_best_each_time(problem.distances());
 
             Self::update_probabilitities::<true>(&mut probability_matrix, &opt_tour);
 
@@ -233,7 +236,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         let loser = self.gen_tour_from_prob_matrix();
         let mut winner = loser.clone();
 
-        winner.ls_2_opt_take_best(self.distances());
+        winner.two_opt_take_best_each_time(self.distances());
 
         // Increase probs of all paths taken by the winner and
         // decrease probs of all paths taken by the loser.
@@ -249,7 +252,6 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         }
     }
 
-    // TODO: maybe use something like C++ std::shuffle(). It could be much faster.
     fn gen_tour_from_prob_matrix(&mut self) -> Tour {
         let city_count = self.number_of_cities();
         let mut cities = Vec::with_capacity(city_count);

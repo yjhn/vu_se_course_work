@@ -2,6 +2,7 @@ use std::fmt::Display;
 use std::io::Write;
 use std::{fs::File, io::BufWriter, path::Path, slice::Windows};
 
+use rand::seq::SliceRandom;
 use rand::Rng;
 
 use crate::{matrix::SquareMatrix, CityIndex};
@@ -54,35 +55,12 @@ impl Tour {
         }
     }
 
-    // TODO: use rand::shuffle.
     pub fn random(city_count: usize, distances: &SquareMatrix<f64>, rng: &mut impl Rng) -> Tour {
         assert!(city_count > 1);
 
-        let mut cities = Vec::with_capacity(city_count);
-        let mut tour_length = 0.0;
-        let start = rng.gen_range(0..city_count);
-        cities.push(CityIndex::new(start));
-
-        for idx in 1..city_count {
-            // Generate indices in unused cities only to avoid duplicates.
-            let index = rng.gen_range(0..(city_count - idx));
-            // Check for unused cities and choose index-th unused city.
-            let mut unused_city_count = 0;
-            for c in 0..city_count {
-                let city_index = CityIndex(c);
-                if !cities.contains(&city_index) {
-                    if unused_city_count == index {
-                        cities.push(city_index);
-                        tour_length += distances[(cities[idx - 1].get(), c)];
-                        break;
-                    }
-                    unused_city_count += 1;
-                }
-            }
-        }
-        // Add last to first link length.
-        tour_length += distances[(cities.last().unwrap().get(), start)];
-        assert_eq!(tour_length, cities.calculate_tour_length(distances));
+        let mut cities: Vec<CityIndex> = (0..city_count).map(|c| CityIndex::new(c)).collect();
+        cities.shuffle(rng);
+        let tour_length = cities.calculate_tour_length(distances);
 
         Tour {
             cities,
@@ -162,7 +140,7 @@ impl Tour {
 
     // Make 2-opt moves until no improvements can be made.
     // Choose the best possible move each time.
-    pub fn ls_2_opt_take_best(&mut self, distances: &SquareMatrix<f64>) {
+    pub fn two_opt_take_best_each_time(&mut self, distances: &SquareMatrix<f64>) {
         #[derive(Debug, Clone, Copy)]
         struct TwoOptMove {
             i: TourIndex,
