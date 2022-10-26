@@ -68,7 +68,6 @@ impl Tour {
         }
     }
 
-    // From https://tsp-basics.blogspot.com/2017/02/building-blocks-reversing-segment.html
     fn reverse_segment(&mut self, start: TourIndex, end: TourIndex) {
         let mut left = start.get();
         let mut right = end.get();
@@ -100,43 +99,11 @@ impl Tour {
         del_length - add_length
     }
 
-    // From https://tsp-basics.blogspot.com/2017/03/2-opt-move.html
-    // a..b in Nim is inclusive!!!
-    // https://nim-lang.org/docs/tut1.html#control-flow-statements-for-statement
     fn make_2_opt_move(&mut self, mut i: TourIndex, j: TourIndex, move_gain: f64) {
         self.reverse_segment(i.inc_mod(self.cities.len()), j);
         // This is not perfectly accurate, but will be good enough.
         self.tour_length -= move_gain;
     }
-
-    /*
-    pub fn ls_2_opt(&mut self, distances: &SquareMatrix<f64>) {
-        let mut locally_optimal = false;
-        let len = self.cities.len();
-
-        while !locally_optimal {
-            locally_optimal = true;
-            'outer: for counter_1 in 0..(len - 2) {
-                let i = counter_1;
-                let x1 = self.cities[i];
-                let x2 = self.cities[(i + 1) % len];
-
-                let counter_2_limit = if i == 0 { len - 1 } else { len };
-
-                for counter_2 in (i + 2)..counter_2_limit {
-                    let j = counter_2;
-                    let y1 = self.cities[j];
-                    let y2 = self.cities[(j + 1) % len];
-
-                    if Self::gain_from_2_opt(x1, x2, y1, y2, distances) > 0.0 {
-                        self.make_2_opt_move(TourIndex::new(i), TourIndex::new(j));
-                        locally_optimal = false;
-                        break 'outer;
-                    }
-                }
-            }
-        }
-    }*/
 
     // Make 2-opt moves until no improvements can be made.
     // Choose the best possible move each time.

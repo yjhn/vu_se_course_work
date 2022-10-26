@@ -58,7 +58,7 @@ fn main() {
         println!("Global random seed: {random_seed}");
     }
 
-    let path = get_path().unwrap_or_else(|| TEST_FILE.to_owned());
+    let path = get_input_file_path().unwrap_or_else(|| TEST_FILE.to_owned());
     if is_root {
         println!("File path: {path}");
     }
@@ -84,7 +84,7 @@ fn main() {
     }
 }
 
-fn get_path() -> Option<String> {
+fn get_input_file_path() -> Option<String> {
     let mut args = env::args();
     // First arg is usually program path or empty.
     args.next();
