@@ -82,7 +82,7 @@ impl Tour {
         }
     }
 
-    pub fn gen_tour_from_prob_matrix(
+    pub fn generate_from_prob_matrix(
         city_count: usize,
         probability_matrix: &SquareMatrix<f64>,
         distances: &SquareMatrix<f64>,

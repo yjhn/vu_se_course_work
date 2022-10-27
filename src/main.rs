@@ -148,33 +148,78 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         random_seed: u64,
         mpi: SystemCommunicator,
     ) -> TspSolver<R> {
-        let mut probability_matrix = SquareMatrix::new(problem.number_of_cities(), 0.0);
         let mut rng = R::seed_from_u64(random_seed);
         let mut best_tour = Tour::PLACEHOLDER;
 
-        // Generate POPULATION_COUNT random tours, optimize them and
-        // update the prob matrix accordingly.
-        for _ in 0..POPULATION_COUNT {
-            let mut opt_tour =
-                Tour::random(problem.number_of_cities(), problem.distances(), &mut rng);
+        match solution_strategy {
+            SolutionStrategy::Cga => {
+                let mut probability_matrix = SquareMatrix::new(problem.number_of_cities(), 0.5);
 
-            opt_tour.two_opt_take_best_each_time(problem.distances());
+                // Generate POPULATION_COUNT random tours and
+                // update the prob matrix accordingly.
+                for _ in 0..POPULATION_COUNT {
+                    let tour_a =
+                        Tour::random(problem.number_of_cities(), problem.distances(), &mut rng);
+                    let tour_b =
+                        Tour::random(problem.number_of_cities(), problem.distances(), &mut rng);
 
-            Self::update_probabilitities::<true>(&mut probability_matrix, &opt_tour);
+                    let (shorter, longer) = if tour_a.is_shorter_than(&tour_b) {
+                        (tour_a, tour_b)
+                    } else {
+                        (tour_b, tour_a)
+                    };
+                    Self::update_probabilitities::<true>(&mut probability_matrix, &shorter);
+                    Self::update_probabilitities::<false>(&mut probability_matrix, &longer);
 
-            if opt_tour.is_shorter_than(&best_tour) {
-                best_tour = opt_tour;
+                    if shorter.is_shorter_than(&best_tour) {
+                        best_tour = shorter;
+                    }
+                }
+
+                TspSolver {
+                    problem,
+                    solution_strategy,
+                    probability_matrix,
+                    best_tour,
+                    current_generation: 0,
+                    rng,
+                    mpi,
+                }
             }
-        }
+            SolutionStrategy::CgaTwoOpt | SolutionStrategy::CgaThreeOpt => {
+                let mut probability_matrix = SquareMatrix::new(problem.number_of_cities(), 0.0);
 
-        TspSolver {
-            problem,
-            solution_strategy,
-            probability_matrix,
-            best_tour,
-            current_generation: 0,
-            rng,
-            mpi,
+                // Generate POPULATION_COUNT random tours, optimize them and
+                // update the prob matrix accordingly.
+                for _ in 0..POPULATION_COUNT {
+                    let mut opt_tour =
+                        Tour::random(problem.number_of_cities(), problem.distances(), &mut rng);
+
+                    match solution_strategy {
+                        SolutionStrategy::CgaTwoOpt => {
+                            opt_tour.two_opt_take_best_each_time(problem.distances())
+                        }
+                        SolutionStrategy::CgaThreeOpt => todo!("implement three-opt"),
+                        SolutionStrategy::Cga => unreachable!(),
+                    }
+
+                    Self::update_probabilitities::<true>(&mut probability_matrix, &opt_tour);
+
+                    if opt_tour.is_shorter_than(&best_tour) {
+                        best_tour = opt_tour;
+                    }
+                }
+
+                TspSolver {
+                    problem,
+                    solution_strategy,
+                    probability_matrix,
+                    best_tour,
+                    current_generation: 0,
+                    rng,
+                    mpi,
+                }
+            }
         }
     }
 
@@ -187,12 +232,17 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
     }
 
     pub fn evolve(&mut self, generations: u32) {
-        for gen in 0..generations {
-            self.current_generation += 1;
+        match self.solution_strategy {
+            SolutionStrategy::Cga => todo!(),
+            SolutionStrategy::CgaTwoOpt | SolutionStrategy::CgaThreeOpt => {
+                for gen in 0..generations {
+                    self.current_generation += 1;
 
-            self.evolve_inner();
-            if gen % EXCHANGE_GENERATIONS == 0 {
-                self.exchange_best_tours();
+                    self.evolve_inner();
+                    if gen % EXCHANGE_GENERATIONS == 0 {
+                        self.exchange_best_tours();
+                    }
+                }
             }
         }
     }
@@ -209,12 +259,11 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         }
 
         // TODO: maybe it's worth it to also update our local best tour?
-        // The paper doesn't do it for some reason.
+        // The paper doesn't do it.
     }
 
     fn best_global_tour(&mut self) -> Tour {
         // Exchange best tours.
-        // for now don't exchange tour length
         // let rank = self.mpi.rank();
         let mpi_closure = UserOperation::commutative(|read_buf, write_buf| {
             let local_best = read_buf.downcast::<CityIndex>().unwrap();
@@ -248,7 +297,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
     }
 
     fn evolve_inner(&mut self) {
-        let loser = Tour::gen_tour_from_prob_matrix(
+        let loser = Tour::generate_from_prob_matrix(
             self.number_of_cities(),
             &self.probability_matrix,
             self.problem.distances(),
@@ -274,6 +323,12 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
     fn distance(&self, a: usize, b: usize) -> f64 {
         self.problem.distances()[(a, b)]
+    }
+
+    fn compare_and_update_probs(prob_matrix: &mut SquareMatrix<f64>, a: &Tour, b: &Tour) {
+        let (shorter, longer) = if a.is_shorter_than(b) { (a, b) } else { (b, a) };
+        Self::update_probabilitities::<true>(prob_matrix, shorter);
+        Self::update_probabilitities::<false>(prob_matrix, longer);
     }
 
     fn update_probabilitities<const INC: bool>(prob_matrix: &mut SquareMatrix<f64>, t: &Tour) {
