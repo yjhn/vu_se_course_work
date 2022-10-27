@@ -8,11 +8,12 @@ use mpi::{
 use rand::{Rng, SeedableRng};
 
 use crate::{
+    config,
     matrix::SquareMatrix,
     probability_matrix::ProbabilityMatrix,
     tour::{Length, Tour},
     tsp_problem::TspProblem,
-    SolutionStrategy, EXCHANGE_GENERATIONS, POPULATION_COUNT,
+    SolutionStrategy,
 };
 
 // Position of city in all cities. Zero-based.
@@ -77,7 +78,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
                 // Generate POPULATION_COUNT random tours and
                 // update the prob matrix accordingly.
-                for _ in 0..POPULATION_COUNT {
+                for _ in 0..config::POPULATION_COUNT {
                     solver.cga_generate_winner_loser::<false>();
                 }
 
@@ -89,7 +90,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
                 // Generate POPULATION_COUNT random tours, optimize them and
                 // update the prob matrix accordingly.
-                for _ in 0..POPULATION_COUNT {
+                for _ in 0..config::POPULATION_COUNT {
                     let mut opt_tour =
                         Tour::random(problem.number_of_cities(), problem.distances(), &mut rng);
 
@@ -136,7 +137,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                     self.current_generation += 1;
 
                     self.evolve_inner_cga();
-                    if gen % EXCHANGE_GENERATIONS == 0 {
+                    if gen % config::EXCHANGE_GENERATIONS == 0 {
                         self.exchange_best_tours();
                     }
                 }
@@ -146,7 +147,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                     self.current_generation += 1;
 
                     self.evolve_inner_opt();
-                    if gen % EXCHANGE_GENERATIONS == 0 {
+                    if gen % config::EXCHANGE_GENERATIONS == 0 {
                         self.exchange_best_tours();
                     }
                 }

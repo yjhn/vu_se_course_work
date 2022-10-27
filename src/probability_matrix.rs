@@ -1,6 +1,6 @@
 use std::ops::Index;
 
-use crate::{matrix::SquareMatrix, order, tour::Tour, tsp_solver::CityIndex, INCREMENT};
+use crate::{config, matrix::SquareMatrix, order, tour::Tour, tsp_solver::CityIndex};
 
 pub struct ProbabilityMatrix(SquareMatrix<f64>);
 
@@ -26,7 +26,7 @@ impl ProbabilityMatrix {
 
     fn decrease_prob(&mut self, c1: CityIndex, c2: CityIndex) {
         let (l, h) = order(c1.get(), c2.get());
-        let val = self.0[(h, l)] - INCREMENT;
+        let val = self.0[(h, l)] - config::INCREMENT;
         // All values in probability matrix must always be in range [0..1].
         self.0[(h, l)] = f64::clamp(val, 0.0, 1.0)
     }
@@ -44,7 +44,7 @@ impl ProbabilityMatrix {
 
     fn increase_prob(&mut self, c1: CityIndex, c2: CityIndex) {
         let (l, h) = order(c1.get(), c2.get());
-        let val = self.0[(h, l)] + INCREMENT;
+        let val = self.0[(h, l)] + config::INCREMENT;
         // All values in probability matrix must always be in range [0..1].
         self.0[(h, l)] = f64::clamp(val, 0.0, 1.0)
     }
