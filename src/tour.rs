@@ -5,9 +5,10 @@ use std::{fs::File, io::BufWriter, path::Path, slice::Windows};
 use rand::seq::SliceRandom;
 use rand::Rng;
 
+use crate::matrix::SquareMatrix;
 use crate::order;
 use crate::probability_matrix::ProbabilityMatrix;
-use crate::{matrix::SquareMatrix, CityIndex};
+use crate::tsp_solver::CityIndex;
 
 // Position of city in the tour. Zero-based.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -111,7 +112,7 @@ impl Tour {
                 // Check for unused cities and choose index-th unused city.
                 let mut seen_unused_city_count = 0;
                 for c in 0..city_count {
-                    let city_index = CityIndex(c);
+                    let city_index = CityIndex::new(c);
                     if !cities.contains(&city_index) {
                         if seen_unused_city_count == index {
                             let (l, h) = order(last, c);
@@ -133,7 +134,7 @@ impl Tour {
             let (mut max_prob, mut max_prob_city, mut max_prob_dist) = (0.0, 0, f64::INFINITY);
             for _ in 0..cities_left {
                 for c in 0..city_count {
-                    let city_index = CityIndex(c);
+                    let city_index = CityIndex::new(c);
                     if !cities.contains(&city_index) {
                         let (l, h) = order(last, c);
                         let prob = probability_matrix[(h, l)];

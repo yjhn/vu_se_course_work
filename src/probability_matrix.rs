@@ -1,6 +1,6 @@
 use std::ops::Index;
 
-use crate::{matrix::SquareMatrix, order, tour::Tour, CityIndex, INCREMENT};
+use crate::{matrix::SquareMatrix, order, tour::Tour, tsp_solver::CityIndex, INCREMENT};
 
 pub struct ProbabilityMatrix(SquareMatrix<f64>);
 
