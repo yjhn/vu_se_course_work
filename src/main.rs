@@ -153,11 +153,23 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
         match solution_strategy {
             SolutionStrategy::Cga => {
-                let mut probability_matrix = SquareMatrix::new(problem.number_of_cities(), 0.5);
+                let probability_matrix = SquareMatrix::new(problem.number_of_cities(), 0.5);
+
+                let mut solver = TspSolver {
+                    problem,
+                    solution_strategy,
+                    probability_matrix,
+                    best_tour,
+                    current_generation: 0,
+                    rng,
+                    mpi,
+                };
 
                 // Generate POPULATION_COUNT random tours and
                 // update the prob matrix accordingly.
                 for _ in 0..POPULATION_COUNT {
+                    solver.cga_generate_winner_loser::<false>();
+                    /*
                     let tour_a =
                         Tour::random(problem.number_of_cities(), problem.distances(), &mut rng);
                     let tour_b =
@@ -173,18 +185,10 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
                     if shorter.is_shorter_than(&best_tour) {
                         best_tour = shorter;
-                    }
+                    }*/
                 }
 
-                TspSolver {
-                    problem,
-                    solution_strategy,
-                    probability_matrix,
-                    best_tour,
-                    current_generation: 0,
-                    rng,
-                    mpi,
-                }
+                solver
             }
             SolutionStrategy::CgaTwoOpt | SolutionStrategy::CgaThreeOpt => {
                 let mut probability_matrix = SquareMatrix::new(problem.number_of_cities(), 0.0);
@@ -233,12 +237,21 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
     pub fn evolve(&mut self, generations: u32) {
         match self.solution_strategy {
-            SolutionStrategy::Cga => todo!(),
+            SolutionStrategy::Cga => {
+                for gen in 0..generations {
+                    self.current_generation += 1;
+
+                    self.evolve_inner_cga();
+                    if gen % EXCHANGE_GENERATIONS == 0 {
+                        self.exchange_best_tours();
+                    }
+                }
+            }
             SolutionStrategy::CgaTwoOpt | SolutionStrategy::CgaThreeOpt => {
                 for gen in 0..generations {
                     self.current_generation += 1;
 
-                    self.evolve_inner();
+                    self.evolve_inner_opt();
                     if gen % EXCHANGE_GENERATIONS == 0 {
                         self.exchange_best_tours();
                     }
@@ -296,8 +309,8 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         Tour::from_hack_cities(best_global_tour)
     }
 
-    fn evolve_inner(&mut self) {
-        let loser = Tour::generate_from_prob_matrix(
+    fn evolve_inner_opt(&mut self) {
+        let loser = Tour::from_prob_matrix(
             self.number_of_cities(),
             &self.probability_matrix,
             self.problem.distances(),
@@ -305,7 +318,11 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         );
         let mut winner = loser.clone();
 
-        winner.two_opt_take_best_each_time(self.distances());
+        match self.solution_strategy {
+            SolutionStrategy::CgaTwoOpt => winner.two_opt_take_best_each_time(self.distances()),
+            SolutionStrategy::CgaThreeOpt => todo!("implement 3-opt"),
+            SolutionStrategy::Cga => unreachable!(),
+        }
 
         // Increase probs of all paths taken by the winner and
         // decrease probs of all paths taken by the loser.
@@ -355,6 +372,52 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         }
         // All values in probability matrix must always be in range [0..1].
         prob_matrix[(h, l)] = f64::clamp(prob_matrix[(h, l)], 0.0, 1.0)
+    }
+
+    fn cga_generate_winner_loser<const FROM_PROBS: bool>(&mut self) {
+        let (tour_a, tour_b) = if FROM_PROBS {
+            let tour_a = Tour::from_prob_matrix(
+                self.number_of_cities(),
+                &self.probability_matrix,
+                self.problem.distances(),
+                &mut self.rng,
+            );
+            let tour_b = Tour::from_prob_matrix(
+                self.number_of_cities(),
+                &self.probability_matrix,
+                self.problem.distances(),
+                &mut self.rng,
+            );
+            (tour_a, tour_b)
+        } else {
+            let tour_a = Tour::random(
+                self.number_of_cities(),
+                self.problem.distances(),
+                &mut self.rng,
+            );
+            let tour_b = Tour::random(
+                self.number_of_cities(),
+                self.problem.distances(),
+                &mut self.rng,
+            );
+            (tour_a, tour_b)
+        };
+
+        let (shorter, longer) = if tour_a.is_shorter_than(&tour_b) {
+            (tour_a, tour_b)
+        } else {
+            (tour_b, tour_a)
+        };
+        Self::update_probabilitities::<true>(&mut self.probability_matrix, &shorter);
+        Self::update_probabilitities::<false>(&mut self.probability_matrix, &longer);
+
+        if shorter.is_shorter_than(&self.best_tour) {
+            self.best_tour = shorter;
+        }
+    }
+
+    fn evolve_inner_cga(&mut self) {
+        self.cga_generate_winner_loser::<true>();
     }
 }
 
