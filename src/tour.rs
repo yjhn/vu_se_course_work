@@ -1,11 +1,13 @@
 use std::fmt::Display;
 use std::io::Write;
+use std::str::CharIndices;
 use std::{fs::File, io::BufWriter, path::Path, slice::Windows};
 
 use rand::seq::SliceRandom;
 use rand::Rng;
 
 use crate::order;
+use crate::probability_matrix::ProbabilityMatrix;
 use crate::{matrix::SquareMatrix, CityIndex};
 
 // Position of city in the tour. Zero-based.
@@ -84,7 +86,7 @@ impl Tour {
 
     pub fn from_prob_matrix(
         city_count: usize,
-        probability_matrix: &SquareMatrix<f64>,
+        probability_matrix: &ProbabilityMatrix,
         distances: &SquareMatrix<f64>,
         rng: &mut impl Rng,
     ) -> Tour {
@@ -270,6 +272,10 @@ impl Tour {
         assert!(i2 - i1 == 1 || i2 - i1 == self.cities.len() - 1);
 
         (self.cities[i1], self.cities[i2])
+    }
+
+    pub fn last_to_first_path(&self) -> (CityIndex, CityIndex) {
+        (*self.cities.last().unwrap(), self.cities[0])
     }
 
     // Returns iterator over all paths except for the
