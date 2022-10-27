@@ -17,6 +17,15 @@ impl<T> SquareMatrix<T>
 where
     T: Copy,
 {
+    pub fn side_length(&self) -> usize {
+        self.side_length
+    }
+}
+
+impl<T> SquareMatrix<T>
+where
+    T: Copy,
+{
     pub fn new(side_length: usize, init_value: T) -> SquareMatrix<T> {
         let data = vec![init_value; side_length * side_length];
 

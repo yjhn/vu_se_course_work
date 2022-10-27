@@ -21,6 +21,8 @@ const POPULATION_COUNT: u32 = 8;
 const INCREMENT: f64 = 1_f64 / POPULATION_COUNT as f64;
 const EXCHANGE_GENERATIONS: u32 = 4;
 const SOLUTION_FILE_NAME: &str = "solution.tsps";
+// Maximum difference between two tour lengths to be considered 0.
+// const TOUR_LENGTH_EPSILON: f64 = 0.001;
 type RNG = SmallRng;
 
 const GLOBAL_SEED: u64 = 865376825679;
@@ -92,6 +94,7 @@ fn get_input_file_path() -> Option<String> {
 }
 
 // Position of city in all cities. Zero-based.
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Equivalence)]
 pub struct CityIndex(usize);
 
@@ -201,19 +204,17 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         // The paper doesn't do it for some reason.
     }
 
-    fn exchange_tours(&self) -> Vec<CityIndex> {
+    fn best_global_tour(&mut self) -> Tour {
         // Exchange best tours.
         // for now don't exchange tour length
-        // length could be transmuted into usize and added at the end
         // let rank = self.mpi.rank();
-        let distances = self.problem.distances();
         let mpi_closure = UserOperation::commutative(|read_buf, write_buf| {
             let local_best = read_buf.downcast::<CityIndex>().unwrap();
             let global_best = write_buf.downcast::<CityIndex>().unwrap();
 
-            // TODO: use hack with tour length transmuting to usize to speed this up.
-            let local_tour_length = local_best.calculate_tour_length(distances);
-            let global_tour_length = global_best.calculate_tour_length(distances);
+            let local_tour_length = local_best.hack_get_tour_length_from_last_element();
+
+            let global_tour_length = global_best.hack_get_tour_length_from_last_element();
 
             // println!("Exchanging global tours, at rank {rank}. GBTL: {global_tour_length}, LBTL: {local_tour_length}");
 
@@ -221,7 +222,10 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                 global_best.copy_from_slice(local_best);
             }
         });
-        // println!("reached line {} in {}", line!(), file!());
+
+        // Append tour length at the end of the tour to not calculate
+        // it needlessly.
+        self.best_tour.hack_append_length_at_tour_end();
 
         // This needs to be filled up before exchanging.
         let mut best_global_tour: Vec<CityIndex> = self.best_tour.cities().to_owned();
@@ -229,7 +233,10 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         self.mpi
             .all_reduce_into(self.best_tour.cities(), &mut best_global_tour, &mpi_closure);
 
-        best_global_tour
+        // remove the hack
+        self.best_tour.remove_hack_length();
+
+        Tour::from_hack_cities(best_global_tour)
     }
 
     fn evolve_inner(&mut self) {
@@ -356,11 +363,5 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         }
         // All values in probability matrix must always be in range [0..1].
         prob_matrix[(h, l)] = f64::clamp(prob_matrix[(h, l)], 0.0, 1.0)
-    }
-
-    pub fn best_global_tour(&self) -> Tour {
-        let best_global_tour_vec = self.exchange_tours();
-
-        Tour::from_cities(best_global_tour_vec, &self.distances())
     }
 }

@@ -26,6 +26,9 @@ impl TourIndex {
     }
 }
 
+#[cfg(not(target_pointer_width = "64"))]
+compile_error!("Hack with tour length only works on >=64 bit architectures");
+
 #[derive(Clone, Debug)]
 pub struct Tour {
     cities: Vec<CityIndex>,
@@ -55,6 +58,16 @@ impl Tour {
         }
     }
 
+    pub fn from_hack_cities(mut cities_with_length: Vec<CityIndex>) -> Tour {
+        let tour_length_usize = cities_with_length.pop().unwrap().get();
+        let tour_length = f64::from_bits(tour_length_usize as u64);
+
+        Tour {
+            cities: cities_with_length,
+            tour_length,
+        }
+    }
+
     pub fn random(city_count: usize, distances: &SquareMatrix<f64>, rng: &mut impl Rng) -> Tour {
         assert!(city_count > 1);
 
@@ -66,6 +79,21 @@ impl Tour {
             cities,
             tour_length,
         }
+    }
+
+    // This function call must be matched by the corresponding
+    // call to remove_hack_length().
+    pub fn hack_append_length_at_tour_end(&mut self) {
+        let length_u64 = self.tour_length.to_bits();
+        // println!("Tour length u64: {length_u64}");
+        // This is only valid on 64 bit architectures
+        let length_usize = length_u64 as usize;
+        let length_index = CityIndex::new(length_usize);
+        self.cities.push(length_index);
+    }
+
+    pub fn remove_hack_length(&mut self) {
+        self.cities.pop();
     }
 
     fn reverse_segment(&mut self, start: TourIndex, end: TourIndex) {
@@ -101,7 +129,8 @@ impl Tour {
 
     fn make_2_opt_move(&mut self, mut i: TourIndex, j: TourIndex, move_gain: f64) {
         self.reverse_segment(i.inc_mod(self.cities.len()), j);
-        // This is not perfectly accurate, but will be good enough.
+        // This is not perfectly accurate due to float rounding,
+        // but will be good enough.
         self.tour_length -= move_gain;
     }
 
@@ -197,6 +226,8 @@ impl Tour {
 
 pub trait Length {
     fn calculate_tour_length(&self, distances: &SquareMatrix<f64>) -> f64;
+
+    fn hack_get_tour_length_from_last_element(&self) -> f64;
 }
 
 impl Length for [CityIndex] {
@@ -204,12 +235,19 @@ impl Length for [CityIndex] {
         assert!(self.len() > 1);
 
         let mut tour_length = 0.0;
-        for idx in 0..(self.len() - 1) {
-            tour_length += distances[(self[idx].get(), self[idx + 1].get())];
+        for idx in 1..self.len() {
+            tour_length += distances[(self[idx - 1].get(), self[idx].get())];
         }
         // Add distance from last to first.
         tour_length += distances[(self.last().unwrap().get(), self[0].get())];
 
         tour_length
+    }
+
+    // The length must first be inserted using Tour::hack_append_length_at_tour_end().
+    fn hack_get_tour_length_from_last_element(&self) -> f64 {
+        let tour_length_usize = self.last().unwrap().get();
+
+        f64::from_bits(tour_length_usize as u64)
     }
 }
