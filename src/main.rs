@@ -39,7 +39,6 @@ mod config {
 // Build and run locally:
 // cargo build --release && RUST_BACKTRACE=1  mpirun --mca opal_warn_on_missing_libcuda 0 target/release/salesman test_data/a280.tsp
 
-// TODO: set up ssh keys to directly connect to hpc
 fn main() {
     const MPI_ROOT_RANK: i32 = 0;
     let universe = mpi::initialize().unwrap();
