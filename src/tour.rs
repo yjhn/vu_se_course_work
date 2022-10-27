@@ -1,6 +1,5 @@
 use std::fmt::Display;
 use std::io::Write;
-use std::str::CharIndices;
 use std::{fs::File, io::BufWriter, path::Path, slice::Windows};
 
 use rand::seq::SliceRandom;
@@ -12,7 +11,7 @@ use crate::{matrix::SquareMatrix, CityIndex};
 
 // Position of city in the tour. Zero-based.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct TourIndex(usize);
+struct TourIndex(usize);
 
 impl TourIndex {
     pub fn new(index: usize) -> TourIndex {
@@ -74,7 +73,7 @@ impl Tour {
     pub fn random(city_count: usize, distances: &SquareMatrix<f64>, rng: &mut impl Rng) -> Tour {
         assert!(city_count > 1);
 
-        let mut cities: Vec<CityIndex> = (0..city_count).map(|c| CityIndex::new(c)).collect();
+        let mut cities: Vec<CityIndex> = (0..city_count).map(CityIndex::new).collect();
         cities.shuffle(rng);
         let tour_length = cities.calculate_tour_length(distances);
 
@@ -265,13 +264,6 @@ impl Tour {
 
     pub fn is_shorter_than(&self, other: &Tour) -> bool {
         self.tour_length < other.tour_length
-    }
-
-    pub fn get_path(&self, i1: TourIndex, i2: TourIndex) -> (CityIndex, CityIndex) {
-        let (i1, i2) = (i1.get(), i2.get());
-        assert!(i2 - i1 == 1 || i2 - i1 == self.cities.len() - 1);
-
-        (self.cities[i1], self.cities[i2])
     }
 
     pub fn last_to_first_path(&self) -> (CityIndex, CityIndex) {

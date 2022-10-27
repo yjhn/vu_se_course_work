@@ -25,7 +25,7 @@ const EXCHANGE_GENERATIONS: u32 = 4;
 const SOLUTION_FILE_NAME: &str = "solution.tsps";
 // Maximum difference between two tour lengths to be considered 0.
 // const TOUR_LENGTH_EPSILON: f64 = 0.001;
-type RNG = SmallRng;
+type MainRng = SmallRng;
 
 const GLOBAL_SEED: u64 = 865376825679;
 const USE_HARDCODED_SEED: bool = false;
@@ -67,7 +67,7 @@ fn main() {
         println!("File path: {path}");
     }
 
-    let mut solver = TspSolver::<RNG>::from_file(
+    let mut solver = TspSolver::<MainRng>::from_file(
         path.clone(),
         SolutionStrategy::CgaTwoOpt,
         random_seed,
@@ -341,10 +341,6 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                 self.best_tour.length()
             );
         }
-    }
-
-    fn distance(&self, a: usize, b: usize) -> f64 {
-        self.problem.distances()[(a, b)]
     }
 
     fn cga_generate_winner_loser<const FROM_PROBS: bool>(&mut self) {
