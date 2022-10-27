@@ -118,7 +118,9 @@ impl Tour {
                             let (l, h) = order(last, c);
                             if prob <= probability_matrix[(h, l)] {
                                 cities.push(city_index);
-                                // This causes false-positive warning #[warn(clippy::mut_range_bound)]
+                                // This causes false positive warning #[warn(clippy::mut_range_bound)]
+                                // It is false positive, because we don't intend
+                                // to affect the loop count of this `for`.
                                 cities_left -= 1;
                                 continue 'outermost;
                             }
