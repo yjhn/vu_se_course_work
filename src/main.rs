@@ -33,13 +33,13 @@ const USE_HARDCODED_SEED: bool = false;
 
 // TODO: set up ssh keys to directly connect to hpc
 fn main() {
+    const MPI_ROOT_RANK: i32 = 0;
     let universe = mpi::initialize().unwrap();
     let world = universe.world();
     let size = world.size();
     let rank = world.rank();
-    let root_rank = 0;
-    let root_process = world.process_at_rank(root_rank);
-    let is_root = rank == root_rank;
+    let root_process = world.process_at_rank(MPI_ROOT_RANK);
+    let is_root = rank == MPI_ROOT_RANK;
     if is_root {
         println!("World size: {size}");
     }
@@ -65,7 +65,12 @@ fn main() {
         println!("File path: {path}");
     }
 
-    let mut solver = TspSolver::<RNG>::from_file(path.clone(), random_seed, world);
+    let mut solver = TspSolver::<RNG>::from_file(
+        path.clone(),
+        SolutionStrategy::CgaTwoOpt,
+        random_seed,
+        world,
+    );
     println!("Initial tour length: {}", solver.best_tour.length());
 
     solver.evolve(EVOLUTION_GENERATION_COUNT);
@@ -108,8 +113,16 @@ impl CityIndex {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SolutionStrategy {
+    Cga,
+    CgaTwoOpt,
+    CgaThreeOpt,
+}
+
 pub struct TspSolver<R: Rng + SeedableRng> {
     problem: TspProblem,
+    solution_strategy: SolutionStrategy,
     // Only upper left triangle will be used.
     probability_matrix: SquareMatrix<f64>,
     best_tour: Tour,
@@ -121,15 +134,17 @@ pub struct TspSolver<R: Rng + SeedableRng> {
 impl<R: Rng + SeedableRng> TspSolver<R> {
     pub fn from_file(
         path: impl AsRef<Path>,
+        solution_strategy: SolutionStrategy,
         random_seed: u64,
         mpi: SystemCommunicator,
     ) -> TspSolver<R> {
         let problem = TspProblem::from_file(path);
-        Self::from_tsp_problem(problem, random_seed, mpi)
+        Self::from_tsp_problem(problem, solution_strategy, random_seed, mpi)
     }
 
     pub fn from_tsp_problem(
         problem: TspProblem,
+        solution_strategy: SolutionStrategy,
         random_seed: u64,
         mpi: SystemCommunicator,
     ) -> TspSolver<R> {
@@ -154,20 +169,13 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
         TspSolver {
             problem,
+            solution_strategy,
             probability_matrix,
             best_tour,
             current_generation: 0,
             rng,
             mpi,
         }
-    }
-
-    pub fn random_as_best(&mut self) {
-        self.best_tour = Tour::random(
-            self.number_of_cities(),
-            self.problem.distances(),
-            &mut self.rng,
-        );
     }
 
     pub fn number_of_cities(&self) -> usize {
