@@ -5,6 +5,7 @@ use std::{fs::File, io::BufWriter, path::Path, slice::Windows};
 use rand::seq::SliceRandom;
 use rand::Rng;
 
+use crate::order;
 use crate::{matrix::SquareMatrix, CityIndex};
 
 // Position of city in the tour. Zero-based.
@@ -73,6 +74,85 @@ impl Tour {
 
         let mut cities: Vec<CityIndex> = (0..city_count).map(|c| CityIndex::new(c)).collect();
         cities.shuffle(rng);
+        let tour_length = cities.calculate_tour_length(distances);
+
+        Tour {
+            cities,
+            tour_length,
+        }
+    }
+
+    pub fn gen_tour_from_prob_matrix(
+        city_count: usize,
+        probability_matrix: &SquareMatrix<f64>,
+        distances: &SquareMatrix<f64>,
+        rng: &mut impl Rng,
+    ) -> Tour {
+        let mut cities = Vec::with_capacity(city_count);
+
+        let starting_city = rng.gen_range(0..city_count);
+        cities.push(CityIndex::new(starting_city));
+        // How many cities are still missing.
+        let mut cities_left = city_count - 1;
+
+        // println!("reached line {} in {}", line!(), file!());
+
+        'outermost: while cities_left > 0 {
+            let last: usize = cities.last().unwrap().get();
+
+            // Allow trying to insert the city `cities_left` times, then,
+            // if still unsuccessful, insert the city with highest probability.
+            for _ in 0..cities_left {
+                // Generate indices in unused cities only to avoid duplicates.
+                let index = rng.gen_range(0..cities_left);
+                let prob = rng.gen::<f64>();
+
+                // Check for unused cities and choose index-th unused city.
+                let mut seen_unused_city_count = 0;
+                for c in 0..city_count {
+                    let city_index = CityIndex(c);
+                    if !cities.contains(&city_index) {
+                        if seen_unused_city_count == index {
+                            let (l, h) = order(last, c);
+                            if prob <= probability_matrix[(h, l)] {
+                                cities.push(city_index);
+                                // This causes false-positive warning #[warn(clippy::mut_range_bound)]
+                                cities_left -= 1;
+                                continue 'outermost;
+                            }
+
+                            // Try to insert another city.
+                            break;
+                        }
+                        seen_unused_city_count += 1;
+                    }
+                }
+            }
+            // If the control flow reaches here, insert city with highest prob.
+            let (mut max_prob, mut max_prob_city, mut max_prob_dist) = (0.0, 0, f64::INFINITY);
+            for _ in 0..cities_left {
+                for c in 0..city_count {
+                    let city_index = CityIndex(c);
+                    if !cities.contains(&city_index) {
+                        let (l, h) = order(last, c);
+                        let prob = probability_matrix[(h, l)];
+                        if prob > max_prob {
+                            let dist = distances[(h, l)];
+                            (max_prob, max_prob_city, max_prob_dist) = (prob, c, dist);
+                        } else if prob == max_prob {
+                            // If probabilities are the same, insert nearer city.
+                            let dist = distances[(h, l)];
+                            if dist < max_prob_dist {
+                                (max_prob, max_prob_city, max_prob_dist) = (prob, c, dist);
+                            }
+                        }
+                    }
+                }
+            }
+            cities.push(CityIndex::new(max_prob_city));
+            cities_left -= 1;
+        }
+
         let tour_length = cities.calculate_tour_length(distances);
 
         Tour {

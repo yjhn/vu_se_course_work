@@ -233,14 +233,19 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         self.mpi
             .all_reduce_into(self.best_tour.cities(), &mut best_global_tour, &mpi_closure);
 
-        // remove the hack
+        // Remove tour length hack.
         self.best_tour.remove_hack_length();
 
         Tour::from_hack_cities(best_global_tour)
     }
 
     fn evolve_inner(&mut self) {
-        let loser = self.gen_tour_from_prob_matrix();
+        let loser = Tour::gen_tour_from_prob_matrix(
+            self.number_of_cities(),
+            &self.probability_matrix,
+            self.problem.distances(),
+            &mut self.rng,
+        );
         let mut winner = loser.clone();
 
         winner.two_opt_take_best_each_time(self.distances());
@@ -259,90 +264,14 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         }
     }
 
-    fn gen_tour_from_prob_matrix(&mut self) -> Tour {
-        let city_count = self.number_of_cities();
-        let mut cities = Vec::with_capacity(city_count);
-
-        let starting_city = self.rng.gen_range(0..city_count);
-        cities.push(CityIndex::new(starting_city));
-        let mut cities_left = city_count - 1;
-
-        // println!("reached line {} in {}", line!(), file!());
-
-        'outermost: while cities_left > 0 {
-            let last: usize = cities.last().unwrap().get();
-
-            // Allow trying to insert the city `cities_left` times, then,
-            // if still unsuccessful, insert the city with highest probability.
-            for _ in 0..cities_left {
-                // Generate indices in unused cities only to avoid duplicates.
-                let index = self.rng.gen_range(0..cities_left);
-                let prob = self.rng.gen::<f64>();
-
-                // Check for unused cities and choose index-th unused city.
-                let mut unused_city_count = 0;
-                for c in 0..city_count {
-                    let city_index = CityIndex(c);
-                    if !cities.contains(&city_index) {
-                        if unused_city_count == index {
-                            let (l, h) = Self::order(last, c);
-                            if prob <= self.probability_matrix[(h, l)] {
-                                cities.push(city_index);
-                                // This causes false-positive warning #[warn(clippy::mut_range_bound)]
-                                cities_left -= 1;
-                                continue 'outermost;
-                            }
-
-                            break;
-                        }
-                        unused_city_count += 1;
-                    }
-                }
-            }
-            // If the control flow reaches here, insert city with highest prob.
-            let (mut max_prob, mut max_prob_city, mut max_prob_dist) = (0.0, 0, f64::INFINITY);
-            for _ in 0..cities_left {
-                for c in 0..city_count {
-                    let city_index = CityIndex(c);
-                    if !cities.contains(&city_index) {
-                        let (l, h) = Self::order(last, c);
-                        let prob = self.probability_matrix[(h, l)];
-                        if prob > max_prob {
-                            let dist = self.distance(h, l);
-                            (max_prob, max_prob_city, max_prob_dist) = (prob, c, dist);
-                        } else if prob == max_prob {
-                            let dist = self.distance(h, l);
-                            if dist < max_prob_dist {
-                                (max_prob, max_prob_city, max_prob_dist) = (prob, c, dist);
-                            }
-                        }
-                    }
-                }
-            }
-            cities.push(CityIndex::new(max_prob_city));
-            cities_left -= 1;
-        }
-
-        Tour::from_cities(cities, self.distances())
-    }
-
     fn distance(&self, a: usize, b: usize) -> f64 {
         self.problem.distances()[(a, b)]
-    }
-
-    // Returns (low, high).
-    fn order(a: usize, b: usize) -> (usize, usize) {
-        if a < b {
-            (a, b)
-        } else {
-            (b, a)
-        }
     }
 
     fn update_probabilitities<const INC: bool>(prob_matrix: &mut SquareMatrix<f64>, t: &Tour) {
         for path in t.paths() {
             if let [c1, c2] = *path {
-                let (l, h) = Self::order(c1.get(), c2.get());
+                let (l, h) = order(c1.get(), c2.get());
                 if INC {
                     prob_matrix[(h, l)] += INCREMENT;
                 } else {
@@ -354,7 +283,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         }
         // Don't forget the last path.
         let (c1, c2) = t.get_path(TourIndex::new(0), TourIndex::new(t.city_count() - 1));
-        let (l, h) = Self::order(c1.get(), c2.get());
+        let (l, h) = order(c1.get(), c2.get());
 
         if INC {
             prob_matrix[(h, l)] += INCREMENT;
@@ -363,5 +292,14 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         }
         // All values in probability matrix must always be in range [0..1].
         prob_matrix[(h, l)] = f64::clamp(prob_matrix[(h, l)], 0.0, 1.0)
+    }
+}
+
+// Returns (low, high).
+pub fn order(a: usize, b: usize) -> (usize, usize) {
+    if a < b {
+        (a, b)
+    } else {
+        (b, a)
     }
 }
