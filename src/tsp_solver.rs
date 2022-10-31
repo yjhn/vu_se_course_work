@@ -98,7 +98,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                         SolutionStrategy::CgaTwoOpt => {
                             opt_tour.two_opt_take_best_each_time(problem.distances())
                         }
-                        SolutionStrategy::CgaThreeOpt => todo!("implement three-opt"),
+                        SolutionStrategy::CgaThreeOpt => opt_tour.three_opt(problem.distances()),
                         SolutionStrategy::Cga => unreachable!(),
                     }
 
@@ -167,9 +167,6 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
             self.probability_matrix
                 .increase_probabilitities(&global_best);
         }
-
-        // TODO: maybe it's worth it to also update our local best tour?
-        // The paper doesn't do it.
     }
 
     pub fn best_global_tour(&mut self) -> Tour {
@@ -217,7 +214,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
         match self.solution_strategy {
             SolutionStrategy::CgaTwoOpt => winner.two_opt_take_best_each_time(self.distances()),
-            SolutionStrategy::CgaThreeOpt => todo!("implement 3-opt"),
+            SolutionStrategy::CgaThreeOpt => winner.three_opt(self.distances()),
             SolutionStrategy::Cga => unreachable!(),
         }
 

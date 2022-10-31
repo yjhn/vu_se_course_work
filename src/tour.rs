@@ -22,11 +22,6 @@ impl TourIndex {
     pub fn get(&self) -> usize {
         self.0
     }
-
-    pub fn inc_mod(&mut self, max_size: usize) -> TourIndex {
-        self.0 = (self.0 + 1) % max_size;
-        *self
-    }
 }
 
 #[cfg(not(target_pointer_width = "64"))]
@@ -44,7 +39,7 @@ impl Tour {
         tour_length: f64::INFINITY,
     };
 
-    pub fn city_count(&self) -> usize {
+    pub fn number_of_cities(&self) -> usize {
         self.cities.len()
     }
 
@@ -211,8 +206,8 @@ impl Tour {
         del_length - add_length
     }
 
-    fn make_2_opt_move(&mut self, mut i: TourIndex, j: TourIndex, move_gain: f64) {
-        self.reverse_segment(i.inc_mod(self.cities.len()), j);
+    fn make_2_opt_move(&mut self, i: TourIndex, j: TourIndex, move_gain: f64) {
+        self.reverse_segment(self.successor(i), j);
         // This is not perfectly accurate due to float rounding,
         // but will be good enough.
         self.tour_length -= move_gain;
@@ -235,14 +230,12 @@ impl Tour {
             let mut best_move: Option<TwoOptMove> = None;
 
             for i in 0..(len - 2) {
-                let x1 = self.cities[i];
-                let x2 = self.cities[(i + 1) % len];
+                let (x1, x2) = self.get_subsequent_pair(TourIndex::new(i));
 
                 let counter_2_limit = if i == 0 { len - 1 } else { len };
 
                 for j in (i + 2)..counter_2_limit {
-                    let y1 = self.cities[j];
-                    let y2 = self.cities[(j + 1) % len];
+                    let (y1, y2) = self.get_subsequent_pair(TourIndex::new(j));
 
                     let expected_gain = Self::gain_from_2_opt(x1, x2, y1, y2, distances);
                     if expected_gain > best_move_gain {
@@ -292,7 +285,7 @@ impl Tour {
         let mut file = BufWriter::new(file);
 
         writeln!(file, "Problem file: {problem_path}").unwrap();
-        writeln!(file, "Number of cities: {}", self.city_count()).unwrap();
+        writeln!(file, "Number of cities: {}", self.number_of_cities()).unwrap();
         writeln!(file, "Tour length: {}", self.tour_length).unwrap();
         writeln!(file, "Cities:").unwrap();
 
@@ -303,6 +296,166 @@ impl Tour {
         }
         writeln!(file).unwrap();
     }
+
+    fn gain_from_3_opt(
+        x1: CityIndex,
+        x2: CityIndex,
+        y1: CityIndex,
+        y2: CityIndex,
+        z1: CityIndex,
+        z2: CityIndex,
+        reconnection_case: ThreeOptReconnectionCase,
+        distances: &SquareMatrix<f64>,
+    ) -> f64 {
+        let (x1, x2, y1, y2, z1, z2) = (x1.get(), x2.get(), y1.get(), y2.get(), z1.get(), z2.get());
+
+        let (del_length, add_length) = match reconnection_case {
+            ThreeOptReconnectionCase::A_B_C => return 0.0,
+            ThreeOptReconnectionCase::RevA_B_C => (
+                distances[(x1, x2)] + distances[(z1, z2)],
+                distances[(x1, z1)] + distances[(x2, z2)],
+            ),
+            ThreeOptReconnectionCase::A_B_RevC => (
+                distances[(y1, y2)] + distances[(z1, z2)],
+                distances[(y1, z1)] + distances[(y2, z2)],
+            ),
+            ThreeOptReconnectionCase::A_RevB_C => (
+                distances[(x1, x2)] + distances[(y1, y2)],
+                distances[(x1, y1)] + distances[(x2, y2)],
+            ),
+            ThreeOptReconnectionCase::A_RevB_RevC => (
+                distances[(x1, x2)] + distances[(y1, y2)] + distances[(z1, z2)],
+                distances[(x1, y1)] + distances[(x2, z1)] + distances[(y2, z2)],
+            ),
+            ThreeOptReconnectionCase::RevA_RevB_C => (
+                distances[(x1, x2)] + distances[(y1, y2)] + distances[(z1, z2)],
+                distances[(x1, z1)] + distances[(x2, y2)] + distances[(y1, z2)],
+            ),
+            ThreeOptReconnectionCase::RevA_B_RevC => (
+                distances[(x1, x2)] + distances[(y1, y2)] + distances[(z1, z2)],
+                distances[(x1, y2)] + distances[(x2, z2)] + distances[(y1, z1)],
+            ),
+            ThreeOptReconnectionCase::RevA_RevB_RevC => (
+                distances[(x1, x2)] + distances[(y1, y2)] + distances[(z1, z2)],
+                distances[(x1, y2)] + distances[(x2, z1)] + distances[(y1, z2)],
+            ),
+        };
+
+        del_length - add_length
+    }
+
+    // x1 = i, x2 = successor(i)
+    // y1 = j, y2 = successor(j)
+    // z1 = k, z2 = successor(k)
+    // z2 - a - x1
+    // x2 - b - y1
+    // y2 - c - z1
+    fn make_3_opt_move(
+        &mut self,
+        i: TourIndex,
+        j: TourIndex,
+        k: TourIndex,
+        reconnection_case: ThreeOptReconnectionCase,
+    ) {
+        match reconnection_case {
+            ThreeOptReconnectionCase::A_B_C => (),
+            ThreeOptReconnectionCase::RevA_B_C => self.reverse_segment(self.successor(k), i),
+            ThreeOptReconnectionCase::A_B_RevC => self.reverse_segment(self.successor(j), k),
+            ThreeOptReconnectionCase::A_RevB_C => self.reverse_segment(self.successor(i), j),
+            ThreeOptReconnectionCase::A_RevB_RevC => {
+                self.reverse_segment(self.successor(i), j);
+                self.reverse_segment(self.successor(j), k);
+            }
+            ThreeOptReconnectionCase::RevA_RevB_C => {
+                self.reverse_segment(self.successor(k), i);
+                self.reverse_segment(self.successor(i), j);
+            }
+            ThreeOptReconnectionCase::RevA_B_RevC => {
+                self.reverse_segment(self.successor(k), i);
+                self.reverse_segment(self.successor(j), k);
+            }
+            ThreeOptReconnectionCase::RevA_RevB_RevC => {
+                self.reverse_segment(self.successor(k), i);
+                self.reverse_segment(self.successor(i), j);
+                self.reverse_segment(self.successor(j), k);
+            }
+        }
+    }
+
+    fn successor(&self, i: TourIndex) -> TourIndex {
+        TourIndex::new((i.get() + 1) % self.number_of_cities())
+    }
+
+    fn get_subsequent_pair(&self, i: TourIndex) -> (CityIndex, CityIndex) {
+        let (i, j) = (i.get(), self.successor(i).get());
+
+        (self.cities[i], self.cities[j])
+    }
+
+    pub fn three_opt(&mut self, distances: &SquareMatrix<f64>) {
+        let mut locally_optimal = false;
+        let len = self.number_of_cities();
+
+        while !locally_optimal {
+            locally_optimal = true;
+
+            'for_i: for i in 0..len {
+                let (x1, x2) = self.get_subsequent_pair(TourIndex::new(i));
+
+                for j in 1..(len - 2) {
+                    let (y1, y2) = self.get_subsequent_pair(TourIndex::new(j));
+
+                    for k in (j + 1)..len {
+                        let (z1, z2) = self.get_subsequent_pair(TourIndex::new(k));
+
+                        for c in [
+                            ThreeOptReconnectionCase::A_B_RevC,
+                            ThreeOptReconnectionCase::RevA_B_RevC,
+                            ThreeOptReconnectionCase::RevA_RevB_RevC,
+                        ] {
+                            let expected_gain =
+                                Self::gain_from_3_opt(x1, x2, y1, y2, z1, z2, c, distances);
+
+                            if expected_gain > 0.0 {
+                                self.make_3_opt_move(
+                                    TourIndex::new(i),
+                                    TourIndex::new(j),
+                                    TourIndex::new(k),
+                                    c,
+                                );
+                                locally_optimal = false;
+                                break 'for_i;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Segments a, b, c are connected by paths that we are replacing.
+// Segments a, b, c are arranged in clockwise fashion:
+//     x1 - x2
+//    /       \
+//   a         b
+//  /           \
+// z2           y1
+//  \          /
+//   z1 - c - y2
+// Here x1, x2, y1, y2, z1, z2 - connection points.
+// There are several possible ways to reconnect the disconnected segments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(non_camel_case_types)]
+pub enum ThreeOptReconnectionCase {
+    A_B_C,
+    RevA_B_C,
+    A_B_RevC,
+    A_RevB_C,
+    A_RevB_RevC,
+    RevA_RevB_C,
+    RevA_B_RevC,
+    RevA_RevB_RevC,
 }
 
 pub trait Length {
