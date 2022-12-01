@@ -15,7 +15,7 @@ const MAX_CITY_COORD: f64 = 1000.0;
 
 pub struct TspProblem {
     cities: Vec<Point>,
-    distances: SquareMatrix<f64>,
+    distances: SquareMatrix<u32>,
 }
 
 impl TspProblem {
@@ -52,17 +52,18 @@ impl TspProblem {
         self.cities.len()
     }
 
-    pub fn distances(&self) -> &SquareMatrix<f64> {
+    pub fn distances(&self) -> &SquareMatrix<u32> {
         &self.distances
     }
 
-    fn calculate_distances(city_count: usize, tsp: &Tsp) -> SquareMatrix<f64> {
-        let mut distances = SquareMatrix::new(city_count, 0.0);
+    fn calculate_distances(city_count: usize, tsp: &Tsp) -> SquareMatrix<u32> {
+        let mut distances = SquareMatrix::new(city_count, 0);
 
         // tspf indices start from 1
         for ind1 in 1..=city_count {
             for ind2 in (ind1 + 1)..=city_count {
-                let dist = tsp.weight(ind1, ind2);
+                let dist_f64 = tsp.weight(ind1, ind2);
+                let dist = nint(dist_f64);
                 distances[(ind1 - 1, ind2 - 1)] = dist;
                 distances[(ind2 - 1, ind1 - 1)] = dist;
             }
@@ -73,7 +74,7 @@ impl TspProblem {
 }
 
 // Returns city distance matrix.
-fn generate_cities(city_count: usize) -> (Vec<Point>, SquareMatrix<f64>) {
+fn generate_cities(city_count: usize) -> (Vec<Point>, SquareMatrix<u32>) {
     let mut rng = SmallRng::from_entropy();
     let mut cities = Vec::with_capacity(city_count);
 
@@ -84,17 +85,23 @@ fn generate_cities(city_count: usize) -> (Vec<Point>, SquareMatrix<f64>) {
     }
 
     // Calculate distances (Euclidean plane)
-    let mut distances = SquareMatrix::new(city_count, 0.0);
+    let mut distances = SquareMatrix::new(city_count, 0);
 
     for i in 0..city_count {
         for j in (i + 1)..city_count {
-            let distance = Point::distance(cities[i], cities[j]);
+            let distance_f64 = Point::distance(cities[i], cities[j]);
+            let distance = nint(distance_f64);
             distances[(i, j)] = distance;
             distances[(j, i)] = distance;
         }
     }
 
     (cities, distances)
+}
+
+// Rounding the same way as nint() function defined in TSPLIB95 format.
+fn nint(f: f64) -> u32 {
+    (f + 0.5).round() as u32
 }
 
 #[derive(Debug, Clone, Copy)]

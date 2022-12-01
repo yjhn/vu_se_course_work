@@ -6,9 +6,9 @@ use rand::seq::SliceRandom;
 use rand::Rng;
 
 use crate::matrix::SquareMatrix;
-use crate::order;
 use crate::probability_matrix::ProbabilityMatrix;
 use crate::tsp_solver::CityIndex;
+use crate::{config, order};
 
 // Position of city in the tour. Zero-based.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -30,24 +30,24 @@ compile_error!("Hack with tour length only works on >=64 bit architectures");
 #[derive(Clone, Debug)]
 pub struct Tour {
     cities: Vec<CityIndex>,
-    tour_length: f64,
+    tour_length: u32,
 }
 
 impl Tour {
     pub const PLACEHOLDER: Tour = Tour {
         cities: Vec::new(),
-        tour_length: f64::INFINITY,
+        tour_length: u32::MAX,
     };
 
     pub fn number_of_cities(&self) -> usize {
         self.cities.len()
     }
 
-    pub fn length(&self) -> f64 {
+    pub fn length(&self) -> u32 {
         self.tour_length
     }
 
-    pub fn from_cities(cities: Vec<CityIndex>, distances: &SquareMatrix<f64>) -> Tour {
+    pub fn from_cities(cities: Vec<CityIndex>, distances: &SquareMatrix<u32>) -> Tour {
         let tour_length = cities.calculate_tour_length(distances);
 
         Tour {
@@ -58,7 +58,7 @@ impl Tour {
 
     pub fn from_hack_cities(mut cities_with_length: Vec<CityIndex>) -> Tour {
         let tour_length_usize = cities_with_length.pop().unwrap().get();
-        let tour_length = f64::from_bits(tour_length_usize as u64);
+        let tour_length = tour_length_usize as u32;
 
         Tour {
             cities: cities_with_length,
@@ -66,7 +66,7 @@ impl Tour {
         }
     }
 
-    pub fn random(city_count: usize, distances: &SquareMatrix<f64>, rng: &mut impl Rng) -> Tour {
+    pub fn random(city_count: usize, distances: &SquareMatrix<u32>, rng: &mut impl Rng) -> Tour {
         assert!(city_count > 1);
 
         let mut cities: Vec<CityIndex> = (0..city_count).map(CityIndex::new).collect();
@@ -82,7 +82,7 @@ impl Tour {
     pub fn from_prob_matrix(
         city_count: usize,
         probability_matrix: &ProbabilityMatrix,
-        distances: &SquareMatrix<f64>,
+        distances: &SquareMatrix<u32>,
         rng: &mut impl Rng,
     ) -> Tour {
         let mut cities = Vec::with_capacity(city_count);
@@ -128,7 +128,7 @@ impl Tour {
                 }
             }
             // If the control flow reaches here, insert city with highest prob.
-            let (mut max_prob, mut max_prob_city, mut max_prob_dist) = (0.0, 0, f64::INFINITY);
+            let (mut max_prob, mut max_prob_city, mut max_prob_dist) = (0.0, 0, u32::MAX);
             for _ in 0..cities_left {
                 for c in 0..city_count {
                     let city_index = CityIndex::new(c);
@@ -163,7 +163,7 @@ impl Tour {
     // This function call must be matched by the corresponding
     // call to remove_hack_length().
     pub fn hack_append_length_at_tour_end(&mut self) {
-        let length_u64 = self.tour_length.to_bits();
+        let length_u64 = self.tour_length as u32;
         // println!("Tour length u64: {length_u64}");
         // This is only valid on 64 bit architectures
         let length_usize = length_u64 as usize;
@@ -200,8 +200,8 @@ impl Tour {
         x2: CityIndex,
         y1: CityIndex,
         y2: CityIndex,
-        distances: &SquareMatrix<f64>,
-    ) -> f64 {
+        distances: &SquareMatrix<u32>,
+    ) -> u32 {
         let (x1, x2, y1, y2) = (x1.get(), x2.get(), y1.get(), y2.get());
 
         let del_length = distances[(x1, x2)] + distances[(y1, y2)];
@@ -210,7 +210,7 @@ impl Tour {
         del_length - add_length
     }
 
-    fn make_2_opt_move(&mut self, i: TourIndex, j: TourIndex, move_gain: f64) {
+    fn make_2_opt_move(&mut self, i: TourIndex, j: TourIndex, move_gain: u32) {
         self.reverse_segment(self.successor(i), j);
         // This is not perfectly accurate due to float rounding,
         // but will be good enough.
@@ -219,7 +219,7 @@ impl Tour {
 
     // Make 2-opt moves until no improvements can be made.
     // Choose the best possible move each time.
-    pub fn two_opt_take_best_each_time(&mut self, distances: &SquareMatrix<f64>) {
+    pub fn two_opt_take_best_each_time(&mut self, distances: &SquareMatrix<u32>) {
         #[derive(Debug, Clone, Copy)]
         struct TwoOptMove {
             i: TourIndex,
@@ -229,7 +229,7 @@ impl Tour {
         let len = self.cities.len();
 
         loop {
-            let mut best_move_gain = 0.0;
+            let mut best_move_gain = 0;
             // There might not be any moves that shorten the tour.
             let mut best_move: Option<TwoOptMove> = None;
 
@@ -310,12 +310,12 @@ impl Tour {
         z1: CityIndex,
         z2: CityIndex,
         reconnection_case: ThreeOptReconnectionCase,
-        distances: &SquareMatrix<f64>,
-    ) -> f64 {
+        distances: &SquareMatrix<u32>,
+    ) -> i32 {
         let (x1, x2, y1, y2, z1, z2) = (x1.get(), x2.get(), y1.get(), y2.get(), z1.get(), z2.get());
 
         let (del_length, add_length) = match reconnection_case {
-            ThreeOptReconnectionCase::A_B_C => return 0.0,
+            ThreeOptReconnectionCase::A_B_C => return 0,
             ThreeOptReconnectionCase::RevA_B_C => (
                 distances[(x1, x2)] + distances[(z1, z2)],
                 distances[(x1, z1)] + distances[(x2, z2)],
@@ -346,7 +346,8 @@ impl Tour {
             ),
         };
 
-        del_length - add_length
+        // Gain can be < 0, so use i32.
+        del_length as i32 - add_length as i32
     }
 
     // x1 = i, x2 = successor(i)
@@ -362,8 +363,8 @@ impl Tour {
         j: TourIndex,
         k: TourIndex,
         reconnection_case: ThreeOptReconnectionCase,
-        move_gain: f64,
-        distances: &SquareMatrix<f64>,
+        move_gain: u32,
+        distances: &SquareMatrix<u32>,
     ) {
         // let tour_len_before = self.cities.calculate_tour_length(distances);
         match reconnection_case {
@@ -392,7 +393,7 @@ impl Tour {
 
         // let tour_len_after = self.cities.calculate_tour_length(distances);
 
-        // if f64::abs(tour_len_before - move_gain - tour_len_after) > 0.0001 {
+        // if u32::abs(tour_len_before - move_gain - tour_len_after) > 0.0001 {
         //     dbg!(i, j, k);
         //     dbg!(reconnection_case, tour_len_before, tour_len_after);
         // }
@@ -409,7 +410,7 @@ impl Tour {
         (self.cities[i], self.cities[j])
     }
 
-    pub fn three_opt(&mut self, distances: &SquareMatrix<f64>) {
+    pub fn three_opt(&mut self, distances: &SquareMatrix<u32>) {
         let mut locally_optimal = false;
         let len = self.number_of_cities();
 
@@ -437,13 +438,14 @@ impl Tour {
                             let expected_gain =
                                 Self::gain_from_3_opt(x1, x2, y1, y2, z1, z2, c, distances);
 
-                            if expected_gain > 0.0000001 {
+                            if expected_gain > 0 {
                                 self.make_3_opt_move(
                                     TourIndex::new(i),
                                     TourIndex::new(j),
                                     TourIndex::new(k),
                                     c,
-                                    expected_gain,
+                                    // expected_gain > 0
+                                    expected_gain as u32,
                                     distances,
                                 );
                                 // dbg!(expected_gain);
@@ -483,16 +485,16 @@ pub enum ThreeOptReconnectionCase {
 }
 
 pub trait Length {
-    fn calculate_tour_length(&self, distances: &SquareMatrix<f64>) -> f64;
+    fn calculate_tour_length(&self, distances: &SquareMatrix<u32>) -> u32;
 
-    fn hack_get_tour_length_from_last_element(&self) -> f64;
+    fn hack_get_tour_length_from_last_element(&self) -> u32;
 }
 
 impl Length for [CityIndex] {
-    fn calculate_tour_length(&self, distances: &SquareMatrix<f64>) -> f64 {
+    fn calculate_tour_length(&self, distances: &SquareMatrix<u32>) -> u32 {
         assert!(self.len() > 1);
 
-        let mut tour_length = 0.0;
+        let mut tour_length = 0;
         for idx in 1..self.len() {
             tour_length += distances[(self[idx - 1].get(), self[idx].get())];
         }
@@ -503,9 +505,9 @@ impl Length for [CityIndex] {
     }
 
     // The length must first be inserted using Tour::hack_append_length_at_tour_end().
-    fn hack_get_tour_length_from_last_element(&self) -> f64 {
+    fn hack_get_tour_length_from_last_element(&self) -> u32 {
         let tour_length_usize = self.last().unwrap().get();
 
-        f64::from_bits(tour_length_usize as u64)
+        tour_length_usize as u32
     }
 }

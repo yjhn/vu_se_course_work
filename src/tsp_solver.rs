@@ -128,7 +128,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         self.problem.number_of_cities()
     }
 
-    pub fn distances(&self) -> &SquareMatrix<f64> {
+    pub fn distances(&self) -> &SquareMatrix<u32> {
         self.problem.distances()
     }
 
@@ -286,7 +286,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         self.cga_generate_winner_loser::<true>();
     }
 
-    pub fn best_tour_length(&self) -> f64 {
+    pub fn best_tour_length(&self) -> u32 {
         self.best_tour.length()
     }
 }
