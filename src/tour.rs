@@ -201,13 +201,14 @@ impl Tour {
         y1: CityIndex,
         y2: CityIndex,
         distances: &SquareMatrix<u32>,
-    ) -> u32 {
+    ) -> i32 {
         let (x1, x2, y1, y2) = (x1.get(), x2.get(), y1.get(), y2.get());
 
         let del_length = distances[(x1, x2)] + distances[(y1, y2)];
         let add_length = distances[(x1, y1)] + distances[(x2, y2)];
 
-        del_length - add_length
+        // Gain can be < 0, use i32.
+        del_length as i32 - add_length as i32
     }
 
     fn make_2_opt_move(&mut self, i: TourIndex, j: TourIndex, move_gain: u32) {
@@ -254,7 +255,7 @@ impl Tour {
 
             // If there is any move that shortens the tour, make it.
             if let Some(move2) = best_move {
-                self.make_2_opt_move(move2.i, move2.j, best_move_gain);
+                self.make_2_opt_move(move2.i, move2.j, best_move_gain as u32);
             } else {
                 // There are no moves that shorten the tour.
                 break;
