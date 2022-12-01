@@ -25,10 +25,8 @@ mod config {
     pub const INCREMENT: f64 = 1_f64 / POPULATION_COUNT as f64;
     pub const EXCHANGE_GENERATIONS: u32 = 4;
     // const SOLUTION_STRATEGY: SolutionStrategy = SolutionStrategy::Cga;
-    pub const SOLUTION_STRATEGY: SolutionStrategy = SolutionStrategy::CgaThreeOpt;
+    pub const SOLUTION_STRATEGY: SolutionStrategy = SolutionStrategy::CgaTwoOpt;
     pub const SOLUTION_FILE_NAME: &str = "solution.tsps";
-    // Maximum difference between two tour lengths to be considered 0.
-    // const TOUR_LENGTH_EPSILON: f64 = 0.001;
 
     pub const GLOBAL_SEED: u64 = 865376825679;
     pub const USE_HARDCODED_SEED: bool = false;
@@ -36,8 +34,8 @@ mod config {
     pub type MainRng = SmallRng;
 }
 
-// Build and run locally:
-// cargo build --release && RUST_BACKTRACE=1  mpirun --mca opal_warn_on_missing_libcuda 0 target/release/salesman test_data/a280.tsp
+// Build and run locally on a single thread:
+// cargo build --release && RUST_BACKTRACE=1  mpirun -c 1 --use-hwthread-cpus --mca opal_warn_on_missing_libcuda 0 target/release/salesman test_data/a280.tsp
 
 fn main() {
     const MPI_ROOT_RANK: i32 = 0;

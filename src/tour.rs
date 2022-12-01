@@ -183,6 +183,9 @@ impl Tour {
         let inversion_size = ((len + right - left + 1) % len) / 2;
         // dbg!(inversion_size);
         // assert!(inversion_size >= 1);
+        // if inversion_size == 0 {
+        //     dbg!();
+        // }
 
         for _ in 1..=inversion_size {
             self.cities.swap(left, right);
@@ -359,16 +362,18 @@ impl Tour {
         j: TourIndex,
         k: TourIndex,
         reconnection_case: ThreeOptReconnectionCase,
+        move_gain: f64,
+        distances: &SquareMatrix<f64>,
     ) {
-        // dbg!(i, j, k, reconnection_case);
+        // let tour_len_before = self.cities.calculate_tour_length(distances);
         match reconnection_case {
             ThreeOptReconnectionCase::A_B_C => (),
             ThreeOptReconnectionCase::RevA_B_C => self.reverse_segment(self.successor(k), i),
             ThreeOptReconnectionCase::A_B_RevC => self.reverse_segment(self.successor(j), k),
             ThreeOptReconnectionCase::A_RevB_C => self.reverse_segment(self.successor(i), j),
             ThreeOptReconnectionCase::A_RevB_RevC => {
-                self.reverse_segment(self.successor(i), j);
                 self.reverse_segment(self.successor(j), k);
+                self.reverse_segment(self.successor(i), j);
             }
             ThreeOptReconnectionCase::RevA_RevB_C => {
                 self.reverse_segment(self.successor(k), i);
@@ -384,6 +389,14 @@ impl Tour {
                 self.reverse_segment(self.successor(j), k);
             }
         }
+
+        // let tour_len_after = self.cities.calculate_tour_length(distances);
+
+        // if f64::abs(tour_len_before - move_gain - tour_len_after) > 0.0001 {
+        //     dbg!(i, j, k);
+        //     dbg!(reconnection_case, tour_len_before, tour_len_after);
+        // }
+        self.tour_length -= move_gain;
     }
 
     fn successor(&self, i: TourIndex) -> TourIndex {
@@ -403,15 +416,17 @@ impl Tour {
         while !locally_optimal {
             locally_optimal = true;
 
-            'for_i: for i in 0..len {
+            'for_i: for counter_1 in 0..len {
+                let i = counter_1;
                 let (x1, x2) = self.get_subsequent_pair(TourIndex::new(i));
 
-                for j in 1..(len - 2) {
-                    let j = (j + i) % len;
+                for counter_2 in 1..(len - 2) {
+                    let j = (counter_2 + i) % len;
                     let (y1, y2) = self.get_subsequent_pair(TourIndex::new(j));
 
-                    for k in (j + 1)..len {
-                        let k = (k + i) % len;
+                    for counter_3 in (counter_2 + 1)..len {
+                        let k = (counter_3 + i) % len;
+                        assert_ne!(j, k);
                         let (z1, z2) = self.get_subsequent_pair(TourIndex::new(k));
 
                         for c in [
@@ -422,13 +437,16 @@ impl Tour {
                             let expected_gain =
                                 Self::gain_from_3_opt(x1, x2, y1, y2, z1, z2, c, distances);
 
-                            if expected_gain > 0.0 {
+                            if expected_gain > 0.0000001 {
                                 self.make_3_opt_move(
                                     TourIndex::new(i),
                                     TourIndex::new(j),
                                     TourIndex::new(k),
                                     c,
+                                    expected_gain,
+                                    distances,
                                 );
+                                // dbg!(expected_gain);
                                 locally_optimal = false;
                                 break 'for_i;
                             }
