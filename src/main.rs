@@ -1,4 +1,4 @@
-// Allow dead code for now.
+// Allow dead code for now ot not get overwhelmed by warnings.
 #![allow(dead_code)]
 
 mod bench;
@@ -34,15 +34,14 @@ mod config {
     pub const POPULATION_COUNT: u32 = 32;
     pub const INCREMENT: f64 = 1_f64 / POPULATION_COUNT as f64;
     pub const EXCHANGE_GENERATIONS: u32 = 4;
-    // const SOLUTION_STRATEGY: SolutionStrategy = SolutionStrategy::Cga;
-    pub const SOLUTION_STRATEGY: SolutionStrategy = SolutionStrategy::CgaTwoOpt;
+    // pub const SOLUTION_STRATEGY: SolutionStrategy = SolutionStrategy::Cga;
+    pub const SOLUTION_STRATEGY: SolutionStrategy = SolutionStrategy::CgaThreeOpt;
+    // pub const SOLUTION_STRATEGY: SolutionStrategy = SolutionStrategy::CgaTwoOpt;
     pub const EPSILON: f64 = 0.0000001;
 
     pub const BENCHMARK: bool = false;
     // Benchmarking constants
     pub mod benchmark {
-        pub const MIN_PROCESSES: u32 = 1;
-        pub const MAX_PROCESSES: u32 = 10;
         pub const MIN_GENERATIONS: u32 = 1;
         pub const MAX_GENERATIONS: u32 = 200;
         pub const REPEAT_TIMES: u32 = 10;
@@ -95,8 +94,6 @@ fn main() {
             world,
             rank,
             is_root,
-            MIN_PROCESSES,
-            MAX_PROCESSES,
             MIN_GENERATIONS,
             MAX_GENERATIONS,
             REPEAT_TIMES,

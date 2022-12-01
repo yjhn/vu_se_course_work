@@ -9,8 +9,6 @@ pub fn benchmark<PD, R>(
     world: SystemCommunicator,
     rank: i32,
     is_root: bool,
-    min_processes: u32,
-    max_processes: u32,
     min_generations: u32,
     max_generations: u32,
     repeat_times: u32,
