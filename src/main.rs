@@ -21,11 +21,11 @@ mod config {
 
     pub const TEST_FILE: &str = "test_data/a10.tsp";
     pub const EVOLUTION_GENERATION_COUNT: u32 = 50;
-    pub const POPULATION_COUNT: u32 = 128;
+    pub const POPULATION_COUNT: u32 = 32;
     pub const INCREMENT: f64 = 1_f64 / POPULATION_COUNT as f64;
     pub const EXCHANGE_GENERATIONS: u32 = 4;
     // const SOLUTION_STRATEGY: SolutionStrategy = SolutionStrategy::Cga;
-    pub const SOLUTION_STRATEGY: SolutionStrategy = SolutionStrategy::CgaTwoOpt;
+    pub const SOLUTION_STRATEGY: SolutionStrategy = SolutionStrategy::CgaThreeOpt;
     pub const SOLUTION_FILE_NAME: &str = "solution.tsps";
     // Maximum difference between two tour lengths to be considered 0.
     // const TOUR_LENGTH_EPSILON: f64 = 0.001;
@@ -73,7 +73,7 @@ fn main() {
     }
 
     let mut solver = TspSolver::<config::MainRng>::from_file(
-        path.clone(),
+        &path,
         config::SOLUTION_STRATEGY,
         random_seed,
         world,

@@ -181,7 +181,8 @@ impl Tour {
         let len = self.cities.len();
 
         let inversion_size = ((len + right - left + 1) % len) / 2;
-        assert!(inversion_size >= 1);
+        // dbg!(inversion_size);
+        // assert!(inversion_size >= 1);
 
         for _ in 1..=inversion_size {
             self.cities.swap(left, right);
@@ -297,6 +298,7 @@ impl Tour {
         writeln!(file).unwrap();
     }
 
+    // The bigger, the better.
     fn gain_from_3_opt(
         x1: CityIndex,
         x2: CityIndex,
@@ -347,6 +349,7 @@ impl Tour {
     // x1 = i, x2 = successor(i)
     // y1 = j, y2 = successor(j)
     // z1 = k, z2 = successor(k)
+    // Connections:
     // z2 - a - x1
     // x2 - b - y1
     // y2 - c - z1
@@ -357,6 +360,7 @@ impl Tour {
         k: TourIndex,
         reconnection_case: ThreeOptReconnectionCase,
     ) {
+        // dbg!(i, j, k, reconnection_case);
         match reconnection_case {
             ThreeOptReconnectionCase::A_B_C => (),
             ThreeOptReconnectionCase::RevA_B_C => self.reverse_segment(self.successor(k), i),
@@ -403,13 +407,15 @@ impl Tour {
                 let (x1, x2) = self.get_subsequent_pair(TourIndex::new(i));
 
                 for j in 1..(len - 2) {
+                    let j = (j + i) % len;
                     let (y1, y2) = self.get_subsequent_pair(TourIndex::new(j));
 
                     for k in (j + 1)..len {
+                        let k = (k + i) % len;
                         let (z1, z2) = self.get_subsequent_pair(TourIndex::new(k));
 
                         for c in [
-                            ThreeOptReconnectionCase::A_B_RevC,
+                            ThreeOptReconnectionCase::A_RevB_C,
                             ThreeOptReconnectionCase::RevA_B_RevC,
                             ThreeOptReconnectionCase::RevA_RevB_RevC,
                         ] {
@@ -448,14 +454,14 @@ impl Tour {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum ThreeOptReconnectionCase {
-    A_B_C,
-    RevA_B_C,
-    A_B_RevC,
-    A_RevB_C,
-    A_RevB_RevC,
-    RevA_RevB_C,
-    RevA_B_RevC,
-    RevA_RevB_RevC,
+    A_B_C = 0,
+    RevA_B_C = 1,
+    A_B_RevC = 2,
+    A_RevB_C = 3,
+    A_RevB_RevC = 4,
+    RevA_RevB_C = 5,
+    RevA_B_RevC = 6,
+    RevA_RevB_RevC = 7,
 }
 
 pub trait Length {

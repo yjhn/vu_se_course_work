@@ -90,7 +90,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
                 // Generate POPULATION_COUNT random tours, optimize them and
                 // update the prob matrix accordingly.
-                for _ in 0..config::POPULATION_COUNT {
+                for i in 0..config::POPULATION_COUNT {
                     let mut opt_tour =
                         Tour::random(problem.number_of_cities(), problem.distances(), &mut rng);
 
@@ -107,7 +107,9 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                     if opt_tour.is_shorter_than(&best_tour) {
                         best_tour = opt_tour;
                     }
+                    println!("Created population member {i}");
                 }
+                println!("Finished creating the initial population");
 
                 TspSolver {
                     problem,
