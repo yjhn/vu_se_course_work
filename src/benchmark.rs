@@ -31,7 +31,10 @@ pub fn benchmark<PD, R>(
     }
 
     // Write everything to a single file for simplicity.
-    let save_file_name = format!("benchmark_results/bm_{problem_name}.out");
+    let save_file_name = format!(
+        "benchmark_results/bm_{problem_name}_{}_cpus.out",
+        world.size()
+    );
     let mut file = File::create(save_file_name).unwrap();
     writeln!(file, "Problem file name: {path}").unwrap();
     writeln!(file, "Problem name: {problem_name}").unwrap();
