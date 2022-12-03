@@ -16,7 +16,6 @@ use crate::{
 };
 
 // Position of city in all cities. Zero-based.
-#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Equivalence)]
 pub struct CityIndex(usize);
 
@@ -93,6 +92,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                 for _ in 0..population_size {
                     solver.cga_generate_winner_loser::<false>();
                 }
+                println!("Finished creating the initial population");
 
                 solver
             }
@@ -102,7 +102,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
                 // Generate POPULATION_COUNT random tours, optimize them and
                 // update the prob matrix accordingly.
-                for i in 0..population_size {
+                for _ in 0..population_size {
                     let mut opt_tour =
                         Tour::random(problem.number_of_cities(), problem.distances(), &mut rng);
 
@@ -119,7 +119,6 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                     if opt_tour.is_shorter_than(&best_tour) {
                         best_tour = opt_tour;
                     }
-                    println!("Created population member {i}");
                 }
                 println!("Finished creating the initial population");
 
@@ -293,12 +292,13 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         self.probability_matrix.increase_probabilitities(&winner);
         self.probability_matrix.decrease_probabilitities(&loser);
         if winner.is_shorter_than(&self.best_tour) {
-            self.best_tour = winner;
             println!(
-                "New best tour length in generation {}: {}",
+                "New best tour length in generation {}, old {}, new {}",
                 self.current_generation,
-                self.best_tour.length()
+                self.best_tour.length(),
+                winner.length()
             );
+            self.best_tour = winner;
         }
     }
 

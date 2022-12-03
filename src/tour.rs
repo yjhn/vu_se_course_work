@@ -24,12 +24,6 @@ impl TourIndex {
     }
 }
 
-#[cfg(not(target_pointer_width = "64"))]
-compile_error!(
-    "Hack with appending tour length to the\
- cities vec only works on >=64 bit architectures"
-);
-
 #[derive(Clone, Debug)]
 pub struct Tour {
     cities: Vec<CityIndex>,
@@ -166,10 +160,8 @@ impl Tour {
     // This function call must be matched by the corresponding
     // call to remove_hack_length().
     pub fn hack_append_length_at_tour_end(&mut self) {
-        let length_u64 = self.tour_length as u32;
-        // println!("Tour length u64: {length_u64}");
-        // This is only valid on 64 bit architectures
-        let length_usize = length_u64 as usize;
+        // This is only valid on >=32 bit architectures.
+        let length_usize = self.tour_length as usize;
         let length_index = CityIndex::new(length_usize);
         self.cities.push(length_index);
     }
