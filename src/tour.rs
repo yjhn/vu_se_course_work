@@ -6,9 +6,9 @@ use rand::seq::SliceRandom;
 use rand::Rng;
 
 use crate::matrix::SquareMatrix;
+use crate::order;
 use crate::probability_matrix::ProbabilityMatrix;
 use crate::tsp_solver::CityIndex;
-use crate::{config, order};
 
 // Position of city in the tour. Zero-based.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -25,7 +25,10 @@ impl TourIndex {
 }
 
 #[cfg(not(target_pointer_width = "64"))]
-compile_error!("Hack with tour length only works on >=64 bit architectures");
+compile_error!(
+    "Hack with appending tour length to the\
+ cities vec only works on >=64 bit architectures"
+);
 
 #[derive(Clone, Debug)]
 pub struct Tour {

@@ -8,7 +8,6 @@ use mpi::{
 use rand::{Rng, SeedableRng};
 
 use crate::{
-    config,
     matrix::SquareMatrix,
     probability_matrix::ProbabilityMatrix,
     tour::{Length, Tour},
@@ -38,6 +37,7 @@ pub struct TspSolver<R: Rng + SeedableRng> {
     probability_matrix: ProbabilityMatrix,
     best_tour: Tour,
     current_generation: u32,
+    exchange_generations: u32,
     rng: R,
     mpi: SystemCommunicator,
 }
@@ -48,9 +48,18 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         solution_strategy: SolutionStrategy,
         random_seed: u64,
         mpi: SystemCommunicator,
+        exchange_generations: u32,
+        population_size: u32,
     ) -> TspSolver<R> {
         let problem = TspProblem::from_file(path);
-        Self::from_tsp_problem(problem, solution_strategy, random_seed, mpi)
+        Self::from_tsp_problem(
+            problem,
+            solution_strategy,
+            random_seed,
+            mpi,
+            exchange_generations,
+            population_size,
+        )
     }
 
     pub fn from_tsp_problem(
@@ -58,6 +67,8 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         solution_strategy: SolutionStrategy,
         random_seed: u64,
         mpi: SystemCommunicator,
+        exchange_generations: u32,
+        population_size: u32,
     ) -> TspSolver<R> {
         let mut rng = R::seed_from_u64(random_seed);
         let mut best_tour = Tour::PLACEHOLDER;
@@ -72,13 +83,14 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                     probability_matrix,
                     best_tour,
                     current_generation: 0,
+                    exchange_generations,
                     rng,
                     mpi,
                 };
 
                 // Generate POPULATION_COUNT random tours and
                 // update the prob matrix accordingly.
-                for _ in 0..config::POPULATION_COUNT {
+                for _ in 0..population_size {
                     solver.cga_generate_winner_loser::<false>();
                 }
 
@@ -90,7 +102,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
                 // Generate POPULATION_COUNT random tours, optimize them and
                 // update the prob matrix accordingly.
-                for i in 0..config::POPULATION_COUNT {
+                for i in 0..population_size {
                     let mut opt_tour =
                         Tour::random(problem.number_of_cities(), problem.distances(), &mut rng);
 
@@ -117,6 +129,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                     probability_matrix,
                     best_tour,
                     current_generation: 0,
+                    exchange_generations,
                     rng,
                     mpi,
                 }
@@ -132,6 +145,10 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         self.problem.distances()
     }
 
+    pub fn current_generation(&self) -> u32 {
+        self.current_generation
+    }
+
     pub fn evolve(&mut self, generations: u32) {
         match self.solution_strategy {
             SolutionStrategy::Cga => {
@@ -139,7 +156,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                     self.current_generation += 1;
 
                     self.evolve_inner_cga();
-                    if gen % config::EXCHANGE_GENERATIONS == 0 {
+                    if gen % self.exchange_generations == 0 {
                         self.exchange_best_tours();
                     }
                 }
@@ -149,7 +166,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                     self.current_generation += 1;
 
                     self.evolve_inner_opt();
-                    if gen % config::EXCHANGE_GENERATIONS == 0 {
+                    if gen % self.exchange_generations == 0 {
                         self.exchange_best_tours();
                     }
                 }
@@ -157,7 +174,56 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         }
     }
 
-    fn exchange_best_tours(&mut self) {
+    // Returns best global tour adn whether it is optimal.
+    pub fn evolve_until_optimal(
+        &mut self,
+        optimal_length: u32,
+        max_generations: u32,
+    ) -> (Tour, bool) {
+        match self.solution_strategy {
+            SolutionStrategy::Cga => {
+                while self.best_tour_length() > optimal_length
+                    && self.current_generation < max_generations
+                {
+                    self.current_generation += 1;
+
+                    self.evolve_inner_cga();
+                    if self.current_generation % self.exchange_generations == 0 {
+                        let best_global = self.exchange_best_tours();
+                        if best_global.length() == optimal_length {
+                            return (best_global, true);
+                        }
+                    }
+                }
+            }
+            SolutionStrategy::CgaTwoOpt | SolutionStrategy::CgaThreeOpt => {
+                while self.best_tour_length() > optimal_length
+                    && self.current_generation < max_generations
+                {
+                    self.current_generation += 1;
+
+                    self.evolve_inner_opt();
+                    if self.current_generation % self.exchange_generations == 0 {
+                        let best_global = self.exchange_best_tours();
+                        if best_global.length() == optimal_length {
+                            return (best_global, true);
+                        }
+                    }
+                }
+            }
+        }
+
+        let best_global = self.best_global_tour();
+        let best_global_length = best_global.length();
+        (best_global, best_global_length == optimal_length)
+    }
+
+    pub fn problem_name(&self) -> &str {
+        self.problem.name()
+    }
+
+    // Returns the best global tour.
+    fn exchange_best_tours(&mut self) -> Tour {
         let global_best = self.best_global_tour();
 
         // Update the probability matrix if the global best tour is
@@ -169,6 +235,8 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
             self.probability_matrix
                 .increase_probabilitities(&global_best);
         }
+
+        global_best
     }
 
     pub fn best_global_tour(&mut self) -> Tour {

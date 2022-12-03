@@ -23,7 +23,6 @@ mod config {
     use crate::SolutionStrategy;
     use rand::rngs::SmallRng;
 
-    pub const TEST_FILE: &str = "test_data/a10.tsp";
     pub const SOLUTION_FILE_NAME: &str = "solution.tsps";
     pub type MainRng = SmallRng;
     pub const GLOBAL_SEED: u64 = 865376825679;
@@ -31,20 +30,28 @@ mod config {
 
     // Algorithm constants
     pub const EVOLUTION_GENERATION_COUNT: u32 = 50;
-    pub const POPULATION_COUNT: u32 = 32;
-    pub const INCREMENT: f64 = 1_f64 / POPULATION_COUNT as f64;
+    pub const POPULATION_SIZE: u32 = 32;
+    pub const INCREMENT: f64 = 1_f64 / POPULATION_SIZE as f64;
     pub const EXCHANGE_GENERATIONS: u32 = 4;
     // pub const SOLUTION_STRATEGY: SolutionStrategy = SolutionStrategy::Cga;
     pub const SOLUTION_STRATEGY: SolutionStrategy = SolutionStrategy::CgaThreeOpt;
     // pub const SOLUTION_STRATEGY: SolutionStrategy = SolutionStrategy::CgaTwoOpt;
-    pub const EPSILON: f64 = 0.0000001;
 
-    pub const BENCHMARK: bool = false;
+    pub const BENCHMARK: bool = true;
     // Benchmarking constants
     pub mod benchmark {
-        pub const MIN_GENERATIONS: u32 = 1;
-        pub const MAX_GENERATIONS: u32 = 200;
+        pub const MAX_GENERATIONS: u32 = 1000;
+        // As defined in the paper.
         pub const REPEAT_TIMES: u32 = 10;
+        pub const POPULATION_SIZE: u32 = 128;
+        pub const EXCHANGE_GENERATIONS: [u32; 4] = [4, 8, 16, 32];
+    }
+
+    pub mod solution_length {
+        pub const ATT532: u32 = 27686;
+        pub const GR666: u32 = 294358;
+        pub const RAT783: u32 = 8806;
+        pub const PR1002: u32 = 259045;
     }
 }
 
@@ -80,49 +87,70 @@ fn main() {
         println!("Global random seed: {random_seed}");
     }
 
-    let path = get_input_file_path().unwrap_or_else(|| config::TEST_FILE.to_owned());
-    if is_root {
-        println!("File path: {path}");
-    }
+    let paths = get_input_file_paths();
 
     if config::BENCHMARK {
         use config::benchmark::*;
+        use config::solution_length;
 
-        benchmark::benchmark::<&str, SmallRng>(
-            &path,
-            random_seed,
-            world,
-            rank,
-            is_root,
-            MIN_GENERATIONS,
-            MAX_GENERATIONS,
-            REPEAT_TIMES,
-        )
+        for path in paths {
+            let (problem_name, solution_length) = match path.split('/').last().unwrap() {
+                "att532.tsp" => ("att532", solution_length::ATT532),
+                "gr666.tsp" => ("gr666", solution_length::GR666),
+                "rat783.tsp" => ("rat783", solution_length::RAT783),
+                "pr1002.tsp" => ("pr1002", solution_length::PR1002),
+                _ => panic!("Benchmark only works with att532, gr666, rat783 and pr1002"),
+            };
+
+            benchmark::benchmark::<&str, SmallRng>(
+                &path,
+                problem_name,
+                solution_length,
+                MAX_GENERATIONS,
+                random_seed,
+                world,
+                is_root,
+                REPEAT_TIMES,
+                POPULATION_SIZE,
+                EXCHANGE_GENERATIONS,
+            );
+        }
     } else {
-        run::<&str, SmallRng>(
-            &path,
-            config::SOLUTION_STRATEGY,
-            config::EVOLUTION_GENERATION_COUNT,
-            random_seed,
-            world,
-            rank,
-            is_root,
-            config::SOLUTION_FILE_NAME,
-        );
+        for path in paths {
+            if is_root {
+                println!("File path: {path}");
+            }
+            run::<&str, SmallRng>(
+                &path,
+                config::SOLUTION_STRATEGY,
+                config::EVOLUTION_GENERATION_COUNT,
+                config::EXCHANGE_GENERATIONS,
+                config::POPULATION_SIZE,
+                random_seed,
+                world,
+                rank,
+                is_root,
+                config::SOLUTION_FILE_NAME,
+            );
+        }
     }
 }
 
-fn get_input_file_path() -> Option<String> {
+// All paths are given as the first argument to the exec, delimiter is ','.
+fn get_input_file_paths() -> Vec<String> {
     let mut args = env::args();
     // First arg is usually program path or empty.
     args.next();
-    args.next()
+    let paths = args.next().unwrap();
+    paths.split(',').map(|p| p.to_owned()).collect()
 }
 
 fn run<PD, R>(
     path: PD,
     solution_strategy: SolutionStrategy,
     evolution_generation_count: u32,
+    exchange_generations: u32,
+    population_size: u32,
     random_seed: u64,
     world: SystemCommunicator,
     rank: i32,
@@ -132,7 +160,14 @@ fn run<PD, R>(
     PD: AsRef<Path> + Display,
     R: Rng + SeedableRng,
 {
-    let mut solver = TspSolver::<R>::from_file(&path, solution_strategy, random_seed, world);
+    let mut solver = TspSolver::<R>::from_file(
+        &path,
+        solution_strategy,
+        random_seed,
+        world,
+        exchange_generations,
+        population_size,
+    );
     println!("Initial tour length: {}", solver.best_tour_length());
 
     solver.evolve(evolution_generation_count);

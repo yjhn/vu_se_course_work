@@ -14,6 +14,7 @@ const MIN_CITY_COORD: f64 = 0.0;
 const MAX_CITY_COORD: f64 = 1000.0;
 
 pub struct TspProblem {
+    name: String,
     cities: Vec<Point>,
     distances: SquareMatrix<u32>,
 }
@@ -22,7 +23,11 @@ impl TspProblem {
     pub fn random(city_count: usize) -> TspProblem {
         let (cities, distances) = generate_cities(city_count);
 
-        TspProblem { cities, distances }
+        TspProblem {
+            name: String::from("random"),
+            cities,
+            distances,
+        }
     }
 
     pub fn from_file(path: impl AsRef<Path>) -> TspProblem {
@@ -45,7 +50,11 @@ impl TspProblem {
 
         let distances = Self::calculate_distances(number_of_cities, &tsp);
 
-        TspProblem { cities, distances }
+        TspProblem {
+            name: tsp.name().to_owned(),
+            cities,
+            distances,
+        }
     }
 
     pub fn number_of_cities(&self) -> usize {
@@ -54,6 +63,10 @@ impl TspProblem {
 
     pub fn distances(&self) -> &SquareMatrix<u32> {
         &self.distances
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     fn calculate_distances(city_count: usize, tsp: &Tsp) -> SquareMatrix<u32> {

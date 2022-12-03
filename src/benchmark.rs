@@ -1,43 +1,86 @@
-use std::{fmt::Display, path::Path};
+use std::fs;
+use std::io::Write;
+use std::{fmt::Display, fs::File, path::Path};
 
 use mpi::topology::SystemCommunicator;
+use mpi::traits::Communicator;
 use rand::{Rng, SeedableRng};
+
+use crate::{tsp_solver::TspSolver, SolutionStrategy};
 
 pub fn benchmark<PD, R>(
     path: PD,
+    problem_name: &str,
+    solution_length: u32,
+    max_generations: u32,
     random_seed: u64,
     world: SystemCommunicator,
-    rank: i32,
     is_root: bool,
-    min_generations: u32,
-    max_generations: u32,
     repeat_times: u32,
+    population_size: u32,
+    exchange_generations: [u32; 4],
 ) where
     PD: AsRef<Path> + Display,
     R: Rng + SeedableRng,
 {
-    // let mut solver = TspSolver::<config::MainRng>::from_file(
-    //     &path,
-    //     config::SOLUTION_STRATEGY,
-    //     random_seed,
-    //     world,
-    // );
-    // println!("Initial tour length: {}", solver.best_tour_length());
+    // Create benchmark results directory.
+    if !Path::new("benchmark_results").exists() {
+        fs::create_dir("benchmark_results").unwrap();
+    }
 
-    // solver.evolve(config::EVOLUTION_GENERATION_COUNT);
+    // Write everything to a single file for simplicity.
+    let save_file_name = format!("benchmark_results/bm_{problem_name}.out");
+    let mut file = File::create(save_file_name).unwrap();
+    writeln!(file, "Problem file name: {path}").unwrap();
+    writeln!(file, "Problem name: {problem_name}").unwrap();
+    writeln!(file, "MPI processes: {}", world.size()).unwrap();
 
-    // println!(
-    //     "Final tour length (for process at rank {rank}): {}",
-    //     solver.best_tour_length()
-    // );
+    if is_root {
+        println!("Problem file name: {path}");
+        println!("Problem name: {problem_name}");
+        println!("MPI processes: {}", world.size());
+    }
 
-    // // This must be executed by all processes.
-    // let best_global = solver.best_global_tour();
+    for s in [
+        SolutionStrategy::Cga,
+        SolutionStrategy::CgaTwoOpt,
+        SolutionStrategy::CgaThreeOpt,
+    ] {
+        writeln!(file, "Algorithm used: {s:?}").unwrap();
 
-    // // Root process outputs the results.
-    // if is_root {
-    //     println!("Best global tour length: {}", best_global.length());
-    //     best_global.save_to_file(path, config::SOLUTION_FILE_NAME);
-    //     println!("Best tour saved to file {}", config::SOLUTION_FILE_NAME);
-    // }
+        for exc in exchange_generations {
+            for i in 0..repeat_times {
+                let mut solver =
+                    TspSolver::<R>::from_file(&path, s, random_seed, world, exc, population_size);
+
+                // Evolve until optimal solution is found, but no longer than max_generations (to terminate at some point).
+                let (best_global, found_optimal) =
+                    solver.evolve_until_optimal(solution_length, max_generations);
+
+                if is_root {
+                    // Format (no newlines):
+                    // exchange_generations,
+                    // bechmark_repeat_time,
+                    // generations,
+                    // found_optimal(bool),
+                    // found_solution_length
+                    writeln!(
+                        file,
+                        "{exc},{i},{},{},{}",
+                        solver.current_generation(),
+                        found_optimal,
+                        best_global.length()
+                    )
+                    .unwrap();
+
+                    println!(
+                        "{exc},{i},{},{},{}",
+                        solver.current_generation(),
+                        found_optimal,
+                        best_global.length()
+                    );
+                }
+            }
+        }
+    }
 }
