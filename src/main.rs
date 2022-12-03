@@ -1,6 +1,7 @@
 // Allow dead code for now ot not get overwhelmed by warnings.
 #![allow(dead_code)]
 
+mod arguments;
 mod bench;
 mod benchmark;
 mod matrix;
@@ -11,13 +12,14 @@ mod tsp_solver;
 
 use std::{env, fmt::Display, path::Path};
 
+use clap::Parser;
 use mpi::{
     topology::{Process, SystemCommunicator},
     traits::{Communicator, Root},
 };
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 
-use crate::tsp_solver::TspSolver;
+use crate::{arguments::Args, tsp_solver::TspSolver};
 
 mod config {
     use crate::SolutionStrategy;
@@ -67,17 +69,25 @@ fn main() {
     let rank = world.rank();
     let root_process = world.process_at_rank(MPI_ROOT_RANK);
     let is_root = rank == MPI_ROOT_RANK;
+
+    let Args {
+        files,
+        max_generations,
+        benchmark,
+    } = arguments::Args::parse();
     if is_root {
-        println!("World size: {size}");
+        println!("TSP files:");
+        for path in files.iter() {
+            println!("{path}");
+        }
+        println!("Max generations: {max_generations}");
     }
 
-    let paths = get_input_file_paths();
-
-    if config::BENCHMARK {
+    if benchmark {
         use config::benchmark::*;
         use config::solution_length;
 
-        for path in paths {
+        for path in files {
             let (problem_name, solution_length) = match path.split('/').last().unwrap() {
                 "att532.tsp" => ("att532", solution_length::ATT532),
                 "gr666.tsp" => ("gr666", solution_length::GR666),
@@ -90,7 +100,7 @@ fn main() {
                 &path,
                 problem_name,
                 solution_length,
-                MAX_GENERATIONS,
+                max_generations,
                 world,
                 root_process,
                 rank,
@@ -101,7 +111,11 @@ fn main() {
             );
         }
     } else {
-        for path in paths {
+        if is_root {
+            println!("World size: {size}");
+        }
+
+        for path in files {
             if is_root {
                 println!("File path: {path}");
             }
