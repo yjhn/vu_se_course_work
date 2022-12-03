@@ -2,10 +2,11 @@ use std::fs;
 use std::io::Write;
 use std::{fmt::Display, fs::File, path::Path};
 
-use mpi::topology::SystemCommunicator;
+use mpi::topology::{Process, SystemCommunicator};
 use mpi::traits::Communicator;
 use rand::{Rng, SeedableRng};
 
+use crate::initialize_random_seed;
 use crate::{tsp_solver::TspSolver, SolutionStrategy};
 
 pub fn benchmark<PD, R>(
@@ -13,8 +14,9 @@ pub fn benchmark<PD, R>(
     problem_name: &str,
     solution_length: u32,
     max_generations: u32,
-    random_seed: u64,
     world: SystemCommunicator,
+    root_process: Process<SystemCommunicator>,
+    rank: i32,
     is_root: bool,
     repeat_times: u32,
     population_size: u32,
@@ -50,6 +52,9 @@ pub fn benchmark<PD, R>(
 
         for exc in exchange_generations {
             for i in 0..repeat_times {
+                // Separate random seed must be created for each run.
+                let random_seed = initialize_random_seed(root_process, rank, is_root);
+
                 let mut solver =
                     TspSolver::<R>::from_file(&path, s, random_seed, world, exc, population_size);
 

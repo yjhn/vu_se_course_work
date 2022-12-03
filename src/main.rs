@@ -12,7 +12,7 @@ mod tsp_solver;
 use std::{env, fmt::Display, path::Path};
 
 use mpi::{
-    topology::SystemCommunicator,
+    topology::{Process, SystemCommunicator},
     traits::{Communicator, Root},
 };
 use rand::{rngs::SmallRng, Rng, SeedableRng};
@@ -71,22 +71,6 @@ fn main() {
         println!("World size: {size}");
     }
 
-    // Broadcast global random seed.
-    let mut global_seed_buf = if is_root {
-        if config::USE_HARDCODED_SEED {
-            [config::GLOBAL_SEED]
-        } else {
-            [rand::random()]
-        }
-    } else {
-        [0]
-    };
-    root_process.broadcast_into(&mut global_seed_buf);
-    let random_seed = global_seed_buf[0] + rank as u64;
-    if is_root {
-        println!("Global random seed: {random_seed}");
-    }
-
     let paths = get_input_file_paths();
 
     if config::BENCHMARK {
@@ -107,8 +91,9 @@ fn main() {
                 problem_name,
                 solution_length,
                 MAX_GENERATIONS,
-                random_seed,
                 world,
+                root_process,
+                rank,
                 is_root,
                 REPEAT_TIMES,
                 POPULATION_SIZE,
@@ -120,6 +105,9 @@ fn main() {
             if is_root {
                 println!("File path: {path}");
             }
+            // Separate random seed must be created for each run.
+            let random_seed = initialize_random_seed(root_process, rank, is_root);
+
             run::<&str, SmallRng>(
                 &path,
                 config::SOLUTION_STRATEGY,
@@ -134,6 +122,29 @@ fn main() {
             );
         }
     }
+}
+
+fn initialize_random_seed(
+    root_process: Process<SystemCommunicator>,
+    rank: i32,
+    is_root: bool,
+) -> u64 {
+    // Broadcast global random seed.
+    let mut global_seed_buf = if is_root {
+        if config::USE_HARDCODED_SEED {
+            [config::GLOBAL_SEED]
+        } else {
+            [rand::random()]
+        }
+    } else {
+        [0]
+    };
+    root_process.broadcast_into(&mut global_seed_buf);
+    let random_seed = global_seed_buf[0] + rank as u64;
+    if is_root {
+        println!("Global random seed: {random_seed}");
+    }
+    random_seed
 }
 
 // All paths are given as the first argument to the exec, delimiter is ','.
