@@ -13,6 +13,12 @@ scp -r <dir> <username>@uosis.mif.vu.lt:Desktop
 2. then from there copy them to to the cluster:
 scp <file> <username>@hpc:
 
+OR, set up SSH access using the wiki instructions found at
+https://mif.vu.lt/itwiki/hpc
+and then you can SSH and scp directly to HPC:
+ssh hpc.mif.vu.lt
+scp -r src Cargo.* data hpc.mif.vu.lt:kursinis
+
 3. Compile the project in release mode:
 
 cd <project dir>
@@ -94,22 +100,3 @@ Alternatively, execute in batch mode.
 sbatch run.sh
 
 # program output will be in file slurm-<JOBID>.out
-
-5. Copying files to the HPC system
-
-To copy files to the HPC cluster, you need to first copy
-the to MIF computer:
-scp <file> <username>@uosis.mif.vu.lt:Desktop/kursinis
-or
-scp -r <dir> <username>@uosis.mif.vu.lt:Desktop
-
-then from there copy them to to the cluster:
-scp <file> <username>@hpc:
-
-keep in mind that HPC filesystem is slow, so copy
-minimum amount possible
-
-Connect to hpc:
-
-ssh <username>@uosis.mif.vu.lt
-ssh hpc
