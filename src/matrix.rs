@@ -5,6 +5,7 @@ use std::{
 
 // Table layout:
 // [row, row, ..]
+#[derive(Clone)]
 pub struct SquareMatrix<T>
 where
     T: Copy,
