@@ -3,7 +3,7 @@ use std::path::Path;
 use mpi::{
     collective::UserOperation,
     topology::SystemCommunicator,
-    traits::{CommunicatorCollectives, Equivalence},
+    traits::{Communicator, CommunicatorCollectives, Equivalence},
 };
 use rand::{Rng, SeedableRng};
 
@@ -12,7 +12,7 @@ use crate::{
     probability_matrix::ProbabilityMatrix,
     tour::{Length, Tour},
     tsp_problem::TspProblem,
-    SolutionStrategy,
+    Algorithm,
 };
 
 // Position of city in all cities. Zero-based.
@@ -31,7 +31,7 @@ impl CityIndex {
 
 pub struct TspSolver<R: Rng + SeedableRng> {
     problem: TspProblem,
-    solution_strategy: SolutionStrategy,
+    solution_strategy: Algorithm,
     // Only upper left triangle will be used.
     probability_matrix: ProbabilityMatrix,
     best_tour: Tour,
@@ -44,7 +44,7 @@ pub struct TspSolver<R: Rng + SeedableRng> {
 impl<R: Rng + SeedableRng> TspSolver<R> {
     pub fn from_file(
         path: impl AsRef<Path>,
-        solution_strategy: SolutionStrategy,
+        solution_strategy: Algorithm,
         random_seed: u64,
         mpi: SystemCommunicator,
         exchange_generations: u32,
@@ -63,7 +63,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
     pub fn from_tsp_problem(
         problem: TspProblem,
-        solution_strategy: SolutionStrategy,
+        solution_strategy: Algorithm,
         random_seed: u64,
         mpi: SystemCommunicator,
         exchange_generations: u32,
@@ -73,7 +73,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         let mut best_tour = Tour::PLACEHOLDER;
 
         match solution_strategy {
-            SolutionStrategy::Cga => {
+            Algorithm::Cga => {
                 let probability_matrix = ProbabilityMatrix::new(problem.number_of_cities(), 0.5);
 
                 let mut solver = TspSolver {
@@ -96,7 +96,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
                 solver
             }
-            SolutionStrategy::CgaTwoOpt | SolutionStrategy::CgaThreeOpt => {
+            Algorithm::CgaTwoOpt | Algorithm::CgaThreeOpt => {
                 let mut probability_matrix =
                     ProbabilityMatrix::new(problem.number_of_cities(), 0.0);
 
@@ -107,15 +107,15 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                         Tour::random(problem.number_of_cities(), problem.distances(), &mut rng);
 
                     match solution_strategy {
-                        SolutionStrategy::CgaTwoOpt => {
-                            opt_tour.two_opt_take_best_each_time(problem.distances())
+                        Algorithm::CgaTwoOpt => {
+                            opt_tour.two_opt(problem.distances());
+                            // opt_tour.two_opt_take_best_each_time(problem.distances())
                         }
-                        SolutionStrategy::CgaThreeOpt => opt_tour.three_opt(problem.distances()),
-                        SolutionStrategy::Cga => unreachable!(),
+                        Algorithm::CgaThreeOpt => opt_tour.three_opt(problem.distances()),
+                        Algorithm::Cga => unreachable!(),
                     }
 
                     probability_matrix.increase_probabilitities(&opt_tour);
-
                     if opt_tour.is_shorter_than(&best_tour) {
                         best_tour = opt_tour;
                     }
@@ -150,7 +150,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
     pub fn evolve(&mut self, generations: u32) {
         match self.solution_strategy {
-            SolutionStrategy::Cga => {
+            Algorithm::Cga => {
                 for gen in 0..generations {
                     self.current_generation += 1;
 
@@ -160,7 +160,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                     }
                 }
             }
-            SolutionStrategy::CgaTwoOpt | SolutionStrategy::CgaThreeOpt => {
+            Algorithm::CgaTwoOpt | Algorithm::CgaThreeOpt => {
                 for gen in 0..generations {
                     self.current_generation += 1;
 
@@ -179,8 +179,9 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         optimal_length: u32,
         max_generations: u32,
     ) -> (Tour, bool) {
+        let is_root = self.mpi.rank() == 0;
         match self.solution_strategy {
-            SolutionStrategy::Cga => {
+            Algorithm::Cga => {
                 while self.best_tour_length() > optimal_length
                     && self.current_generation < max_generations
                 {
@@ -195,7 +196,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                     }
                 }
             }
-            SolutionStrategy::CgaTwoOpt | SolutionStrategy::CgaThreeOpt => {
+            Algorithm::CgaTwoOpt | Algorithm::CgaThreeOpt => {
                 while self.best_tour_length() > optimal_length
                     && self.current_generation < max_generations
                 {
@@ -207,6 +208,10 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                         if best_global.length() == optimal_length {
                             return (best_global, true);
                         }
+                    }
+
+                    if is_root {
+                        println!("Finished generation {}", self.current_generation);
                     }
                 }
             }
@@ -282,9 +287,10 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         let mut winner = loser.clone();
 
         match self.solution_strategy {
-            SolutionStrategy::CgaTwoOpt => winner.two_opt_take_best_each_time(self.distances()),
-            SolutionStrategy::CgaThreeOpt => winner.three_opt(self.distances()),
-            SolutionStrategy::Cga => unreachable!(),
+            Algorithm::CgaTwoOpt => winner.two_opt(self.distances()),
+            // Algorithm::CgaTwoOpt => winner.two_opt_take_best_each_time(self.distances()),
+            Algorithm::CgaThreeOpt => winner.three_opt(self.distances()),
+            Algorithm::Cga => unreachable!(),
         }
 
         // Increase probs of all paths taken by the winner and

@@ -22,7 +22,6 @@ use rand::{rngs::SmallRng, Rng, SeedableRng};
 use crate::{arguments::Args, tsp_solver::TspSolver};
 
 mod config {
-    use crate::SolutionStrategy;
     use rand::rngs::SmallRng;
 
     pub const SOLUTION_FILE_NAME: &str = "solution.tsps";
@@ -35,9 +34,6 @@ mod config {
     pub const POPULATION_SIZE: u32 = 32;
     pub const INCREMENT: f64 = 1_f64 / POPULATION_SIZE as f64;
     pub const EXCHANGE_GENERATIONS: u32 = 4;
-    // pub const SOLUTION_STRATEGY: SolutionStrategy = SolutionStrategy::Cga;
-    pub const SOLUTION_STRATEGY: SolutionStrategy = SolutionStrategy::CgaThreeOpt;
-    // pub const SOLUTION_STRATEGY: SolutionStrategy = SolutionStrategy::CgaTwoOpt;
 
     pub const BENCHMARK: bool = true;
     // Benchmarking constants
@@ -58,7 +54,7 @@ mod config {
 }
 
 // Build and run locally on a single thread:
-// cargo build --release && RUST_BACKTRACE=1  mpirun -c 1 --use-hwthread-cpus --mca opal_warn_on_missing_libcuda 0 target/release/salesman test_data/a280.tsp
+// cargo build --release && RUST_BACKTRACE=1 mpirun -c 1 --use-hwthread-cpus --mca opal_warn_on_missing_libcuda 0 target/release/salesman -f data/att532.tsp -b 5 -a CgaTwoOpt --benchmark
 
 fn main() {
     // Initialize stuff.
@@ -74,13 +70,21 @@ fn main() {
         files,
         max_generations,
         benchmark,
+        benchmark_repeat_times,
+        algorithms,
     } = arguments::Args::parse();
+
+    let algorithms: Vec<Algorithm> = algorithms
+        .iter()
+        .map(|a| a.as_str().try_into().unwrap())
+        .collect();
+
     if is_root {
-        println!("TSP files:");
-        for path in files.iter() {
-            println!("{path}");
-        }
+        println!("TSP files:\n{files:?}");
         println!("Max generations: {max_generations}");
+        println!("Benchmark: {benchmark}");
+        println!("Benchmark repeat times: {benchmark_repeat_times}");
+        println!("Algorithms: {algorithms:?}");
     }
 
     if benchmark {
@@ -105,9 +109,10 @@ fn main() {
                 root_process,
                 rank,
                 is_root,
-                REPEAT_TIMES,
+                benchmark_repeat_times,
                 POPULATION_SIZE,
-                EXCHANGE_GENERATIONS,
+                &EXCHANGE_GENERATIONS,
+                &algorithms,
             );
         }
     } else {
@@ -124,7 +129,7 @@ fn main() {
 
             run::<&str, SmallRng>(
                 &path,
-                config::SOLUTION_STRATEGY,
+                algorithms[0],
                 config::EVOLUTION_GENERATION_COUNT,
                 config::EXCHANGE_GENERATIONS,
                 config::POPULATION_SIZE,
@@ -172,7 +177,7 @@ fn get_input_file_paths() -> Vec<String> {
 
 fn run<PD, R>(
     path: PD,
-    solution_strategy: SolutionStrategy,
+    solution_strategy: Algorithm,
     evolution_generation_count: u32,
     exchange_generations: u32,
     population_size: u32,
@@ -214,10 +219,23 @@ fn run<PD, R>(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SolutionStrategy {
+pub enum Algorithm {
     Cga,
     CgaTwoOpt,
     CgaThreeOpt,
+}
+
+impl TryFrom<&str> for Algorithm {
+    type Error = ();
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "Cga" => Ok(Algorithm::Cga),
+            "CgaTwoOpt" => Ok(Algorithm::CgaTwoOpt),
+            "CgaThreeOpt" => Ok(Algorithm::CgaThreeOpt),
+            _ => Err(()),
+        }
+    }
 }
 
 // Returns (low, high).
