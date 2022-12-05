@@ -214,6 +214,38 @@ impl Tour {
     }
 
     // Make 2-opt moves until no improvements can be made.
+    // Choose the first move that gives any benefit.
+    pub fn two_opt(&mut self, distances: &SquareMatrix<u32>) {
+        let len = self.cities.len();
+        let mut locally_optimal = false;
+
+        while !locally_optimal {
+            locally_optimal = true;
+            for i in 0..(len - 2) {
+                let (x1, x2) = self.get_subsequent_pair(TourIndex::new(i));
+
+                let counter_2_limit = if i == 0 { len - 1 } else { len };
+
+                for j in (i + 2)..counter_2_limit {
+                    let (y1, y2) = self.get_subsequent_pair(TourIndex::new(j));
+
+                    let expected_gain = Self::gain_from_2_opt(x1, x2, y1, y2, distances);
+                    if expected_gain > 0 {
+                        // If the move is beneficial, make it.
+                        self.make_2_opt_move(
+                            TourIndex::new(i),
+                            TourIndex::new(j),
+                            expected_gain as u32,
+                        );
+                        locally_optimal = false;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // Make 2-opt moves until no improvements can be made.
     // Choose the best possible move each time.
     pub fn two_opt_take_best_each_time(&mut self, distances: &SquareMatrix<u32>) {
         #[derive(Debug, Clone, Copy)]
