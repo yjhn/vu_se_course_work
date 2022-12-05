@@ -29,9 +29,16 @@ C_INCLUDE_PATH=/usr/lib/gcc/x86_64-linux-gnu/9/include"${C_INCLUDE_PATH+:}${C_IN
 
 4. Run the program
 
+more info here:
+https://mif.vu.lt/itwiki/hpc#paketinis_uzduociu_vykdymas_slurm
+and here
+https://hpc.nmsu.edu/discovery/slurm/slurm-commands/
+
 # /// file run.sh
 #!/bin/bash
+#SBATCH -o run_4t.out
 #SBATCH -p main
+#SBATCH --time 0-20:00:00
 #SBATCH -n4
 module load openmpi
 mpirun <program exec dir (relative path)> <program args>
@@ -48,6 +55,8 @@ exit
 
 Alternatively, execute in batch mode.
 sbatch run.sh
+
+# program output will be in file run_4t.out
 
 # Installing the prerequisites
 
@@ -73,30 +82,3 @@ cd <project dir>
 module load openmpi
 source "$HOME/.cargo/env"
 C_INCLUDE_PATH=/usr/lib/gcc/x86_64-linux-gnu/9/include"${C_INCLUDE_PATH+:}${C_INCLUDE_PATH-}" LIBCLANG_PATH="/scratch/lustre/home/<username>/clang_stuff/usr/lib/llvm-12/lib" cargo build --release
-
-4. Run the program:
-
-more info here:
-https://mif.vu.lt/itwiki/hpc#paketinis_uzduociu_vykdymas_slurm
-
-# /// file run.sh
-#!/bin/bash
-#SBATCH -p main
-#SBATCH -n4
-module load openmpi
-mpirun <program exec dir (relative path)> <program args>
-# ///
-
-chmod +x run.sh
-
-Enter the instant run environment (not necessary, but otherwise jobs are queued and might run later)
-This will run the program instantly, but will give one core only.
-module load openmpi
-srun --pty $SHELL
-mpirun <program>
-exit
-
-Alternatively, execute in batch mode.
-sbatch run.sh
-
-# program output will be in file slurm-<JOBID>.out
