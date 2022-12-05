@@ -13,6 +13,7 @@ use crate::matrix::SquareMatrix;
 const MIN_CITY_COORD: f64 = 0.0;
 const MAX_CITY_COORD: f64 = 1000.0;
 
+#[derive(Clone)]
 pub struct TspProblem {
     name: String,
     cities: Vec<Point>,
