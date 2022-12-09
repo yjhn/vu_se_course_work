@@ -1,0 +1,24 @@
+Problem file name: data/att532.tsp
+Problem name: att532
+MPI processes: 1
+Algorithm used: CgaTwoOpt
+4,0,500,false,29306
+4,1,500,false,29444
+4,2,500,false,29504
+4,3,500,false,29397
+4,4,500,false,29306
+8,0,500,false,29360
+8,1,500,false,29367
+8,2,500,false,29498
+8,3,500,false,29586
+8,4,500,false,29256
+16,0,500,false,29379
+16,1,500,false,29508
+16,2,500,false,29312
+16,3,500,false,29523
+16,4,500,false,29442
+32,0,500,false,29538
+32,1,500,false,29581
+32,2,500,false,29202
+32,3,500,false,29472
+32,4,500,false,29480

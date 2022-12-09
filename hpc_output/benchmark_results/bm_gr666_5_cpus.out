@@ -1,0 +1,9 @@
+Problem file name: data/gr666.tsp
+Problem name: gr666
+MPI processes: 5
+Algorithm used: CgaTwoOpt
+4,0,500,false,314974
+4,1,500,false,317130
+4,2,500,false,316950
+4,3,500,false,317779
+4,4,500,false,315766
