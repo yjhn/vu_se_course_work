@@ -26,8 +26,6 @@ mod config {
 
     pub const SOLUTION_FILE_NAME: &str = "solution.tsps";
     pub type MainRng = SmallRng;
-    pub const GLOBAL_SEED: u64 = 865376825679;
-    pub const USE_HARDCODED_SEED: bool = false;
 
     // Algorithm constants
     pub const EVOLUTION_GENERATION_COUNT: u32 = 50;
@@ -149,15 +147,7 @@ fn initialize_random_seed(
     is_root: bool,
 ) -> u64 {
     // Broadcast global random seed.
-    let mut global_seed_buf = if is_root {
-        if config::USE_HARDCODED_SEED {
-            [config::GLOBAL_SEED]
-        } else {
-            [rand::random()]
-        }
-    } else {
-        [0]
-    };
+    let mut global_seed_buf = if is_root { [rand::random()] } else { [0] };
     root_process.broadcast_into(&mut global_seed_buf);
     let random_seed = global_seed_buf[0] + rank as u64;
     if is_root {
