@@ -6,6 +6,7 @@ mod bench;
 mod benchmark;
 mod matrix;
 mod probability_matrix;
+mod timing;
 mod tour;
 mod tsp_problem;
 mod tsp_solver;

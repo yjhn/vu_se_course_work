@@ -88,16 +88,18 @@ pub fn benchmark<PD, R>(
                 );
 
                 // Evolve until optimal solution is found, but no longer than max_generations (to terminate at some point).
-                let (best_global, found_optimal) =
+                let (best_global, found_optimal, timings) =
                     solver.evolve_until_optimal(solution_length, max_generations);
 
                 if is_root {
-                    // Format (no newlines):
+                    // Format (no newlines except NEWLINE):
                     // exchange_generations,
                     // bechmark_repeat_time,
                     // generations,
                     // found_optimal(bool),
                     // found_solution_length
+                    // NEWLINE
+                    // timings: TODO: unrelated: also log best global tour lengths for each generation.
                     writeln!(
                         file,
                         "{exc},{i},{},{},{}",

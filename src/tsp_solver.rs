@@ -1,4 +1,7 @@
-use std::path::Path;
+use std::{
+    path::Path,
+    time::{Duration, Instant},
+};
 
 use mpi::{
     collective::UserOperation,
@@ -10,6 +13,7 @@ use rand::{Rng, SeedableRng};
 use crate::{
     matrix::SquareMatrix,
     probability_matrix::ProbabilityMatrix,
+    timing::SingleGenerationTimingInfo,
     tour::{Length, Tour},
     tsp_problem::TspProblem,
     Algorithm,
@@ -108,7 +112,8 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
                     match solution_strategy {
                         Algorithm::CgaTwoOpt => {
-                            opt_tour.two_opt_dlb(problem.distances());
+                            opt_tour.two_opt(problem.distances());
+                            // opt_tour.two_opt_dlb(problem.distances());
                             // opt_tour.two_opt_take_best_each_time(problem.distances())
                         }
                         Algorithm::CgaThreeOpt => opt_tour.three_opt(problem.distances()),
@@ -148,13 +153,16 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         self.current_generation
     }
 
-    pub fn evolve(&mut self, generations: u32) {
+    pub fn evolve(&mut self, generations: u32) -> Vec<SingleGenerationTimingInfo> {
+        let mut timings = Vec::with_capacity(generations as usize);
+
         match self.solution_strategy {
             Algorithm::Cga => {
                 for gen in 0..generations {
                     self.current_generation += 1;
 
-                    self.evolve_inner_cga();
+                    let timing = self.evolve_inner_cga();
+                    timings.push(timing);
                     if gen % self.exchange_generations == 0 {
                         self.exchange_best_tours();
                     }
@@ -164,13 +172,16 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                 for gen in 0..generations {
                     self.current_generation += 1;
 
-                    self.evolve_inner_opt();
+                    let timing = self.evolve_inner_opt();
+                    timings.push(timing);
                     if gen % self.exchange_generations == 0 {
                         self.exchange_best_tours();
                     }
                 }
             }
         }
+
+        timings
     }
 
     // Returns best global tour adn whether it is optimal.
@@ -178,8 +189,10 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         &mut self,
         optimal_length: u32,
         max_generations: u32,
-    ) -> (Tour, bool) {
+    ) -> (Tour, bool, Vec<SingleGenerationTimingInfo>) {
         let is_root = self.mpi.rank() == 0;
+        let mut timings = Vec::with_capacity(max_generations as usize);
+
         match self.solution_strategy {
             Algorithm::Cga => {
                 while self.best_tour_length() > optimal_length
@@ -187,11 +200,16 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                 {
                     self.current_generation += 1;
 
-                    self.evolve_inner_cga();
+                    let timing = self.evolve_inner_cga();
+                    timings.push(timing);
                     if self.current_generation % self.exchange_generations == 0 {
                         let best_global = self.exchange_best_tours();
                         if best_global.length() == optimal_length {
-                            return (best_global, true);
+                            return (best_global, true, timings);
+                        } else if best_global.length() < optimal_length {
+                            // Sanity check.
+                            println!("Found tour shorter than best possible");
+                            self.mpi.abort(2);
                         }
                     }
                 }
@@ -202,11 +220,17 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                 {
                     self.current_generation += 1;
 
-                    self.evolve_inner_opt();
+                    let timing = self.evolve_inner_opt();
+                    timings.push(timing);
                     if self.current_generation % self.exchange_generations == 0 {
                         let best_global = self.exchange_best_tours();
+                        println!("Best global tour length: {}", best_global.length());
                         if best_global.length() == optimal_length {
-                            return (best_global, true);
+                            return (best_global, true, timings);
+                        } else if best_global.length() < optimal_length {
+                            // Sanity check.
+                            println!("Found tour shorter than best possible");
+                            self.mpi.abort(2);
                         }
                     }
 
@@ -219,7 +243,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
         let best_global = self.best_global_tour();
         let best_global_length = best_global.length();
-        (best_global, best_global_length == optimal_length)
+        (best_global, best_global_length == optimal_length, timings)
     }
 
     pub fn problem_name(&self) -> &str {
@@ -277,21 +301,26 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         Tour::from_hack_cities(best_global_tour)
     }
 
-    fn evolve_inner_opt(&mut self) {
+    fn evolve_inner_opt(&mut self) -> SingleGenerationTimingInfo {
+        let generation_timer = Instant::now();
         let loser = Tour::from_prob_matrix(
             self.number_of_cities(),
             &self.probability_matrix,
             self.problem.distances(),
             &mut self.rng,
         );
+        let tour_generation_from_prob_matrix = generation_timer.elapsed();
         let mut winner = loser.clone();
 
+        let optimization_timer = Instant::now();
         match self.solution_strategy {
-            Algorithm::CgaTwoOpt => winner.two_opt_dlb(self.distances()),
+            Algorithm::CgaTwoOpt => winner.two_opt(self.distances()),
+            // Algorithm::CgaTwoOpt => winner.two_opt_dlb(self.distances()),
             // Algorithm::CgaTwoOpt => winner.two_opt_take_best_each_time(self.distances()),
             Algorithm::CgaThreeOpt => winner.three_opt(self.distances()),
             Algorithm::Cga => unreachable!(),
         }
+        let tour_optimization = optimization_timer.elapsed();
 
         // Increase probs of all paths taken by the winner and
         // decrease probs of all paths taken by the loser.
@@ -306,6 +335,8 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
             );
             self.best_tour = winner;
         }
+
+        SingleGenerationTimingInfo::new(tour_generation_from_prob_matrix, tour_optimization)
     }
 
     fn cga_generate_winner_loser<const FROM_PROBS: bool>(&mut self) {
@@ -356,8 +387,11 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         }
     }
 
-    fn evolve_inner_cga(&mut self) {
+    fn evolve_inner_cga(&mut self) -> SingleGenerationTimingInfo {
+        let gen_timer = Instant::now();
         self.cga_generate_winner_loser::<true>();
+        let gen = gen_timer.elapsed();
+        SingleGenerationTimingInfo::new(gen, Duration::ZERO)
     }
 
     pub fn best_tour_length(&self) -> u32 {
