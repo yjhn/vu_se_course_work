@@ -27,12 +27,16 @@ impl TourIndex {
 #[derive(Clone, Debug)]
 pub struct Tour {
     cities: Vec<CityIndex>,
+    // Don't look bits, used for 2-opt nad 3-opt.
+    // Indexed by CityIndex.
+    dont_look_bits: Vec<bool>,
     tour_length: u32,
 }
 
 impl Tour {
     pub const PLACEHOLDER: Tour = Tour {
         cities: Vec::new(),
+        dont_look_bits: Vec::new(),
         tour_length: u32::MAX,
     };
 
@@ -46,9 +50,11 @@ impl Tour {
 
     pub fn from_cities(cities: Vec<CityIndex>, distances: &SquareMatrix<u32>) -> Tour {
         let tour_length = cities.calculate_tour_length(distances);
+        let dont_look_bits = vec![false; cities.len()];
 
         Tour {
             cities,
+            dont_look_bits,
             tour_length,
         }
     }
@@ -56,9 +62,13 @@ impl Tour {
     pub fn from_hack_cities(mut cities_with_length: Vec<CityIndex>) -> Tour {
         let tour_length_usize = cities_with_length.pop().unwrap().get();
         let tour_length = tour_length_usize as u32;
+        // Cities don't contain length anymore.
+        let cities = cities_with_length;
+        let dont_look_bits = vec![false; cities.len()];
 
         Tour {
-            cities: cities_with_length,
+            cities,
+            dont_look_bits,
             tour_length,
         }
     }
@@ -69,9 +79,11 @@ impl Tour {
         let mut cities: Vec<CityIndex> = (0..city_count).map(CityIndex::new).collect();
         cities.shuffle(rng);
         let tour_length = cities.calculate_tour_length(distances);
+        let dont_look_bits = vec![false; cities.len()];
 
         Tour {
             cities,
+            dont_look_bits,
             tour_length,
         }
     }
@@ -150,9 +162,11 @@ impl Tour {
         }
 
         let tour_length = cities.calculate_tour_length(distances);
+        let dont_look_bits = vec![false; cities.len()];
 
         Tour {
             cities,
+            dont_look_bits,
             tour_length,
         }
     }
@@ -211,6 +225,87 @@ impl Tour {
         // This is not perfectly accurate due to float rounding,
         // but will be good enough.
         self.tour_length -= move_gain;
+    }
+
+    // Make 2-opt moves until no improvements can be made.
+    // Choose the first move that gives any benefit.
+    pub fn two_opt_dlb(&mut self, distances: &SquareMatrix<u32>) {
+        let len = self.cities.len();
+        let mut locally_optimal = false;
+
+        while !locally_optimal {
+            locally_optimal = true;
+            'outermost_for: for counter_1 in 0..len {
+                let first_city = self.cities[counter_1];
+                // If the DLB bit is set for the current city, we won't
+                // find any unique improving moves from this city
+                // Improving moves involving it may still be found from
+                // other cities.
+                if self.dlb(first_city) {
+                    continue;
+                }
+
+                // We need to go in both forward and backward directions.
+                // Alternative: set DLB to off if the segment with the city is reversed.
+
+                // 0 = forward, 1 = backward.
+                for direction in [0, 1] {
+                    let i = if direction == 0 {
+                        // In forward direction examine the path (counter_1, successor(counter_1).
+                        counter_1
+                    } else {
+                        // In backward direction examine the path (predecessor(counter_1), counter_1)
+                        (counter_1 + len - 1) % len
+                    };
+
+                    let (x1, x2) = self.get_subsequent_pair(TourIndex::new(i));
+
+                    for j in 0..len {
+                        let (y1, y2) = self.get_subsequent_pair(TourIndex::new(j));
+
+                        // Since we are iterating over the same array as the
+                        // loop above, we will get the same elements in one iteration and only one element ahead in another.
+                        if x1 == y1 || x2 == y1 || y2 == x1 {
+                            continue;
+                        }
+
+                        let expected_gain = Self::gain_from_2_opt(x1, x2, y1, y2, distances);
+                        if expected_gain > 0 {
+                            // If the move is beneficial, clear DLB for the
+                            // cities involved and make the move.
+                            self.clear_dlb(x1);
+                            self.clear_dlb(x2);
+                            self.clear_dlb(y1);
+                            self.clear_dlb(y2);
+
+                            self.make_2_opt_move(
+                                TourIndex::new(i),
+                                TourIndex::new(j),
+                                expected_gain as u32,
+                            );
+                            locally_optimal = false;
+                            // Search the next first city for improvements.
+                            continue 'outermost_for;
+                        }
+                    }
+                }
+                // If we reach here, we didn't find a valid move,
+                // so set the DLB for the city searched.
+                self.set_dlb(first_city);
+            }
+        }
+    }
+
+    fn dlb(&self, city: CityIndex) -> bool {
+        self.dont_look_bits[city.get()]
+    }
+
+    fn clear_dlb(&mut self, city: CityIndex) {
+        self.dont_look_bits[city.get()] = false;
+    }
+
+    fn set_dlb(&mut self, city: CityIndex) {
+        self.dont_look_bits[city.get()] = true;
     }
 
     // Make 2-opt moves until no improvements can be made.

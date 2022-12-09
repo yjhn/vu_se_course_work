@@ -108,7 +108,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
                     match solution_strategy {
                         Algorithm::CgaTwoOpt => {
-                            opt_tour.two_opt(problem.distances());
+                            opt_tour.two_opt_dlb(problem.distances());
                             // opt_tour.two_opt_take_best_each_time(problem.distances())
                         }
                         Algorithm::CgaThreeOpt => opt_tour.three_opt(problem.distances()),
@@ -287,7 +287,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         let mut winner = loser.clone();
 
         match self.solution_strategy {
-            Algorithm::CgaTwoOpt => winner.two_opt(self.distances()),
+            Algorithm::CgaTwoOpt => winner.two_opt_dlb(self.distances()),
             // Algorithm::CgaTwoOpt => winner.two_opt_take_best_each_time(self.distances()),
             Algorithm::CgaThreeOpt => winner.three_opt(self.distances()),
             Algorithm::Cga => unreachable!(),
