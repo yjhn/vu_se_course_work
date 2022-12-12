@@ -95,74 +95,84 @@ impl Tour {
         rng: &mut impl Rng,
     ) -> Tour {
         let mut cities = Vec::with_capacity(city_count);
+        // Tracks whether each city is used. True = unused, false = used.
+        let mut available_cities = vec![true; city_count];
 
         let starting_city = rng.gen_range(0..city_count);
         cities.push(CityIndex::new(starting_city));
+        available_cities[starting_city] = false;
+        // Keep track of the last city added to the tour.
+        let mut last_added_city = starting_city;
+
         // How many cities are still missing.
         let mut cities_left = city_count - 1;
 
-        // println!("reached line {} in {}", line!(), file!());
-
         'outermost: while cities_left > 0 {
-            let last: usize = cities.last().unwrap().get();
-
             // Allow trying to insert the city `cities_left` times, then,
             // if still unsuccessful, insert the city with highest probability.
-            for _ in 0..cities_left {
+            for _ in 0..(cities_left * 2) {
                 // Generate indices in unused cities only to avoid duplicates.
-                let index = rng.gen_range(0..cities_left);
+                let index = rng.gen_range(1..=cities_left);
                 let prob = rng.gen::<f64>();
-
                 // Check for unused cities and choose index-th unused city.
-                let mut seen_unused_city_count = 0;
-                for c in 0..city_count {
-                    let city_index = CityIndex::new(c);
-                    if !cities.contains(&city_index) {
-                        if seen_unused_city_count == index {
-                            let (l, h) = order(last, c);
-                            if prob <= probability_matrix[(h, l)] {
-                                cities.push(city_index);
-                                // This causes false positive warning #[warn(clippy::mut_range_bound)]
-                                // It is false positive, because we don't intend
-                                // to affect the loop count of this `for`.
-                                cities_left -= 1;
-                                continue 'outermost;
-                            }
+                // optimized
+                // Find n-th 'true' in available_cities and try to insert it.
+                let mut available: usize = 0;
+                for (idx, unused) in available_cities.iter_mut().enumerate() {
+                    available += (*unused) as usize;
+                    if available == index {
+                        let (l, h) = order(last_added_city, idx);
+                        if prob <= probability_matrix[(h, l)] {
+                            let city = CityIndex::new(idx);
 
-                            // Try to insert another city.
+                            cities.push(city);
+                            last_added_city = idx;
+                            // This causes false positive warning #[warn(clippy::mut_range_bound)]
+                            // It is false positive, because we don't intend
+                            // to affect the loop count of the outer `for`.
+                            cities_left -= 1;
+                            // Mark this city as used.
+                            *unused = false;
+                            continue 'outermost;
+                        } else {
                             break;
                         }
-                        seen_unused_city_count += 1;
                     }
                 }
             }
+
             // If the control flow reaches here, insert city with highest prob.
             let (mut max_prob, mut max_prob_city, mut max_prob_dist) = (0.0, 0, u32::MAX);
-            for _ in 0..cities_left {
-                for c in 0..city_count {
-                    let city_index = CityIndex::new(c);
-                    if !cities.contains(&city_index) {
-                        let (l, h) = order(last, c);
-                        let prob = probability_matrix[(h, l)];
-                        if prob > max_prob {
-                            let dist = distances[(h, l)];
-                            (max_prob, max_prob_city, max_prob_dist) = (prob, c, dist);
-                        } else if prob == max_prob {
-                            // If probabilities are the same, insert nearer city.
-                            let dist = distances[(h, l)];
-                            if dist < max_prob_dist {
-                                (max_prob, max_prob_city, max_prob_dist) = (prob, c, dist);
-                            }
+
+            for (idx, unused) in available_cities.iter_mut().enumerate() {
+                if *unused {
+                    let (l, h) = order(last_added_city, idx);
+                    let prob = probability_matrix[(h, l)];
+                    if prob > max_prob {
+                        let dist = distances[(h, l)];
+                        (max_prob, max_prob_city, max_prob_dist) = (prob, idx, dist);
+                    } else if prob == max_prob {
+                        // If probabilities are the same, insert nearer city.
+                        let dist = distances[(h, l)];
+                        if dist < max_prob_dist {
+                            (max_prob, max_prob_city, max_prob_dist) = (prob, idx, dist);
                         }
                     }
                 }
             }
             cities.push(CityIndex::new(max_prob_city));
+            // Mark the city as used.
+            available_cities[max_prob_city] = false;
             cities_left -= 1;
         }
 
+        // assert_eq!(cities.len(), city_count);
+        // Check that there are no duplicates.
+        // println!("{:?}", cities);
+        // assert!(!(1..cities.len()).any(|i| cities[i..].contains(&cities[i - 1])));
+
         let tour_length = cities.calculate_tour_length(distances);
-        let dont_look_bits = vec![false; cities.len()];
+        let dont_look_bits = vec![false; city_count];
 
         Tour {
             cities,
@@ -222,8 +232,6 @@ impl Tour {
 
     fn make_2_opt_move(&mut self, i: TourIndex, j: TourIndex, move_gain: u32) {
         self.reverse_segment(self.successor(i), j);
-        // This is not perfectly accurate due to float rounding,
-        // but will be good enough.
         self.tour_length -= move_gain;
     }
 
@@ -487,7 +495,7 @@ impl Tour {
         k: TourIndex,
         reconnection_case: ThreeOptReconnectionCase,
         move_gain: u32,
-        distances: &SquareMatrix<u32>,
+        // distances: &SquareMatrix<u32>,
     ) {
         // let tour_len_before = self.cities.calculate_tour_length(distances);
         match reconnection_case {
@@ -569,7 +577,7 @@ impl Tour {
                                     c,
                                     // expected_gain > 0
                                     expected_gain as u32,
-                                    distances,
+                                    /*distances,*/
                                 );
                                 // dbg!(expected_gain);
                                 locally_optimal = false;
