@@ -13,7 +13,7 @@ use rand::{Rng, SeedableRng};
 use crate::{
     matrix::SquareMatrix,
     probability_matrix::ProbabilityMatrix,
-    timing::SingleGenerationTimingInfo,
+    timing::{GenerationsInfo, SingleGenerationTimingInfo},
     tour::{Length, Tour},
     tsp_problem::TspProblem,
     Algorithm,
@@ -91,7 +91,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                     mpi,
                 };
 
-                // Generate POPULATION_COUNT random tours and
+                // Generate population_size random tours and
                 // update the prob matrix accordingly.
                 for _ in 0..population_size {
                     solver.cga_generate_winner_loser::<false>();
@@ -112,8 +112,8 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
                     match solution_strategy {
                         Algorithm::CgaTwoOpt => {
-                            opt_tour.two_opt(problem.distances());
-                            // opt_tour.two_opt_dlb(problem.distances());
+                            // opt_tour.two_opt(problem.distances());
+                            opt_tour.two_opt_dlb(problem.distances());
                             // opt_tour.two_opt_take_best_each_time(problem.distances())
                         }
                         Algorithm::CgaThreeOpt => opt_tour.three_opt(problem.distances()),
@@ -184,66 +184,56 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         timings
     }
 
-    // Returns best global tour adn whether it is optimal.
+    // Returns best global tour length, whether the best global
+    // tour is optimal, and vec of best tour length for each
+    // generation and generation timings.
     pub fn evolve_until_optimal(
         &mut self,
         optimal_length: u32,
         max_generations: u32,
-    ) -> (Tour, bool, Vec<SingleGenerationTimingInfo>) {
-        let is_root = self.mpi.rank() == 0;
-        let mut timings = Vec::with_capacity(max_generations as usize);
+    ) -> (u32, bool, GenerationsInfo) {
+        let mut lengths_timings = GenerationsInfo::new(max_generations as usize);
+        let mut best_global_len = 0;
 
-        match self.solution_strategy {
-            Algorithm::Cga => {
-                while self.best_tour_length() > optimal_length
-                    && self.current_generation < max_generations
-                {
-                    self.current_generation += 1;
+        while self.best_tour_length() > optimal_length && self.current_generation < max_generations
+        {
+            self.current_generation += 1;
+            let timing = match self.solution_strategy {
+                Algorithm::Cga => self.evolve_inner_cga(),
+                Algorithm::CgaTwoOpt | Algorithm::CgaThreeOpt => self.evolve_inner_opt(),
+            };
 
-                    let timing = self.evolve_inner_cga();
-                    timings.push(timing);
-                    if self.current_generation % self.exchange_generations == 0 {
-                        let best_global = self.exchange_best_tours();
-                        if best_global.length() == optimal_length {
-                            return (best_global, true, timings);
-                        } else if best_global.length() < optimal_length {
-                            // Sanity check.
-                            println!("Found tour shorter than best possible");
-                            self.mpi.abort(2);
-                        }
-                    }
-                }
-            }
-            Algorithm::CgaTwoOpt | Algorithm::CgaThreeOpt => {
-                while self.best_tour_length() > optimal_length
-                    && self.current_generation < max_generations
-                {
-                    self.current_generation += 1;
+            let best_global = if self.current_generation % self.exchange_generations == 0 {
+                self.exchange_best_tours()
+            } else {
+                // We are not exchanging tours this generation, but still
+                // collect best global tour length for statistics.
+                self.best_global_tour()
+            };
 
-                    let timing = self.evolve_inner_opt();
-                    timings.push(timing);
-                    if self.current_generation % self.exchange_generations == 0 {
-                        let best_global = self.exchange_best_tours();
-                        println!("Best global tour length: {}", best_global.length());
-                        if best_global.length() == optimal_length {
-                            return (best_global, true, timings);
-                        } else if best_global.length() < optimal_length {
-                            // Sanity check.
-                            println!("Found tour shorter than best possible");
-                            self.mpi.abort(2);
-                        }
-                    }
+            best_global_len = best_global.length();
+            lengths_timings.add_generation(
+                timing.tour_generation_from_prob_matrix(),
+                timing.tour_optimization(),
+                best_global_len,
+            );
+            // println!("Finished generation {}", self.current_generation);
 
-                    if is_root {
-                        println!("Finished generation {}", self.current_generation);
-                    }
-                }
+            if best_global_len == optimal_length {
+                return (best_global_len, true, lengths_timings);
+            } else if best_global_len < optimal_length {
+                // Sanity check.
+                println!(
+                    "Found tour shorter than best possible:\n{:?}",
+                    best_global.cities()
+                );
+                self.mpi.abort(2);
             }
         }
 
-        let best_global = self.best_global_tour();
-        let best_global_length = best_global.length();
-        (best_global, best_global_length == optimal_length, timings)
+        // If this place is reached all the generations have passed,
+        // their info is already in the vec and optimal tour has not been found.
+        (best_global_len, false, lengths_timings)
     }
 
     pub fn problem_name(&self) -> &str {
@@ -314,8 +304,8 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
         let optimization_timer = Instant::now();
         match self.solution_strategy {
-            Algorithm::CgaTwoOpt => winner.two_opt(self.distances()),
-            // Algorithm::CgaTwoOpt => winner.two_opt_dlb(self.distances()),
+            // Algorithm::CgaTwoOpt => winner.two_opt(self.distances()),
+            Algorithm::CgaTwoOpt => winner.two_opt_dlb(self.distances()),
             // Algorithm::CgaTwoOpt => winner.two_opt_take_best_each_time(self.distances()),
             Algorithm::CgaThreeOpt => winner.three_opt(self.distances()),
             Algorithm::Cga => unreachable!(),
@@ -328,7 +318,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         self.probability_matrix.decrease_probabilitities(&loser);
         if winner.is_shorter_than(&self.best_tour) {
             println!(
-                "New best tour length in generation {}, old {}, new {}",
+                "New best tour length in generation {}: old {}, new {}",
                 self.current_generation,
                 self.best_tour.length(),
                 winner.length()
@@ -378,7 +368,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
         if shorter.is_shorter_than(&self.best_tour) {
             println!(
-                "Best tour length improved in generation {}, old {}, new {}",
+                "Best tour length improved in generation {}: old {}, new {}",
                 self.current_generation,
                 self.best_tour.length(),
                 shorter.length()
