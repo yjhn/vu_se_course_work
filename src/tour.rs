@@ -598,8 +598,6 @@ impl Tour {
         let mut locally_optimal = false;
         let len = self.number_of_cities();
 
-        dbg!();
-
         'outermost: while !locally_optimal {
             locally_optimal = true;
             for preliminary_city_1_pos in (0..len).map(TourIndex::new) {

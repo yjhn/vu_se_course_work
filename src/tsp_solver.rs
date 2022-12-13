@@ -96,7 +96,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                 for _ in 0..population_size {
                     solver.cga_generate_winner_loser::<false>();
                 }
-                println!("Finished creating the initial population");
+                // println!("Finished creating the initial population");
 
                 solver
             }
@@ -106,7 +106,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
                 // Generate POPULATION_COUNT random tours, optimize them and
                 // update the prob matrix accordingly.
-                for i in 0..population_size {
+                for _ in 0..population_size {
                     let mut opt_tour =
                         Tour::random(problem.number_of_cities(), problem.distances(), &mut rng);
 
@@ -125,7 +125,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                     if opt_tour.is_shorter_than(&best_tour) {
                         best_tour = opt_tour;
                     }
-                    println!("Created individual {i}");
+                    // println!("Created individual {i}");
                 }
                 println!("Finished creating the initial population");
 
