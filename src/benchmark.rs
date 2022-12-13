@@ -1,6 +1,6 @@
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::{fmt::Display, fs::File, path::Path};
+use std::{fmt::Display, path::Path};
 
 use mpi::topology::{Process, SystemCommunicator};
 use mpi::traits::Communicator;
@@ -56,7 +56,11 @@ pub fn benchmark<PD, R>(
             }
         } else {
             // Blackhole writes from other threads.
-            File::open("/dev/null").unwrap()
+            OpenOptions::new()
+                .read(false)
+                .write(true)
+                .open("/dev/null")
+                .unwrap()
         };
 
         if is_root {
