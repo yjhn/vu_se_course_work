@@ -106,7 +106,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
 
                 // Generate POPULATION_COUNT random tours, optimize them and
                 // update the prob matrix accordingly.
-                for _ in 0..population_size {
+                for i in 0..population_size {
                     let mut opt_tour =
                         Tour::random(problem.number_of_cities(), problem.distances(), &mut rng);
 
@@ -116,7 +116,8 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                             opt_tour.two_opt_dlb(problem.distances());
                             // opt_tour.two_opt_take_best_each_time(problem.distances())
                         }
-                        Algorithm::CgaThreeOpt => opt_tour.three_opt(problem.distances()),
+                        Algorithm::CgaThreeOpt => opt_tour.three_opt_dlb(problem.distances()),
+                        // Algorithm::CgaThreeOpt => opt_tour.three_opt(problem.distances()),
                         Algorithm::Cga => unreachable!(),
                     }
 
@@ -124,6 +125,7 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                     if opt_tour.is_shorter_than(&best_tour) {
                         best_tour = opt_tour;
                     }
+                    println!("Created individual {i}");
                 }
                 println!("Finished creating the initial population");
 
@@ -307,7 +309,8 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
             // Algorithm::CgaTwoOpt => winner.two_opt(self.distances()),
             Algorithm::CgaTwoOpt => winner.two_opt_dlb(self.distances()),
             // Algorithm::CgaTwoOpt => winner.two_opt_take_best_each_time(self.distances()),
-            Algorithm::CgaThreeOpt => winner.three_opt(self.distances()),
+            // Algorithm::CgaThreeOpt => winner.three_opt(self.distances()),
+            Algorithm::CgaThreeOpt => winner.three_opt_dlb(self.distances()),
             Algorithm::Cga => unreachable!(),
         }
         let tour_optimization = optimization_timer.elapsed();

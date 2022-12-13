@@ -22,6 +22,10 @@ impl TourIndex {
     pub fn get(&self) -> usize {
         self.0
     }
+
+    pub fn wrapping_add(self, value: usize, len: usize) -> TourIndex {
+        TourIndex::new((self.0 + value) % len)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -243,33 +247,30 @@ impl Tour {
 
         while !locally_optimal {
             locally_optimal = true;
-            'outermost_for: for counter_1 in 0..len {
-                let first_city = self.cities[counter_1];
+            'outermost_for: for city1_pos in 0..len {
+                let first_city = self.cities[city1_pos];
                 // If the DLB bit is set for the current city, we won't
                 // find any unique improving moves from this city
                 // Improving moves involving it may still be found from
                 // other cities.
-                if self.dlb(first_city) {
+                if self.is_dlb_set(first_city) {
                     continue;
                 }
 
                 // We need to go in both forward and backward directions.
                 // Alternative: set DLB to off if the segment with the city is reversed.
 
+                // We either start from the first chosen city or its predecessor.
+                // Reason: segment containing both first_city and its neighbour
+                // could have been reversed and if we don't consider first_city's
+                // predecessor (which could have been its successor previously),
+                // we could miss some moves by ignoring first_city if it has DLB set.
                 // 0 = forward, 1 = backward.
-                for direction in [0, 1] {
-                    let i = if direction == 0 {
-                        // In forward direction examine the path (counter_1, successor(counter_1).
-                        counter_1
-                    } else {
-                        // In backward direction examine the path (predecessor(counter_1), counter_1)
-                        (counter_1 + len - 1) % len
-                    };
+                for start_city_pos in [city1_pos, (city1_pos + len - 1) % len] {
+                    let (x1, x2) = self.get_subsequent_pair(TourIndex::new(start_city_pos));
 
-                    let (x1, x2) = self.get_subsequent_pair(TourIndex::new(i));
-
-                    for j in 0..len {
-                        let (y1, y2) = self.get_subsequent_pair(TourIndex::new(j));
+                    for city2_pos in 0..len {
+                        let (y1, y2) = self.get_subsequent_pair(TourIndex::new(city2_pos));
 
                         // Since we are iterating over the same array as the
                         // loop above, we will get the same elements in one iteration and only one element ahead in another.
@@ -287,8 +288,8 @@ impl Tour {
                             self.clear_dlb(y2);
 
                             self.make_2_opt_move(
-                                TourIndex::new(i),
-                                TourIndex::new(j),
+                                TourIndex::new(start_city_pos),
+                                TourIndex::new(city2_pos),
                                 expected_gain as u32,
                             );
                             locally_optimal = false;
@@ -304,14 +305,17 @@ impl Tour {
         }
     }
 
-    fn dlb(&self, city: CityIndex) -> bool {
+    // Is DLB set for this city?
+    fn is_dlb_set(&self, city: CityIndex) -> bool {
         self.dont_look_bits[city.get()]
     }
 
+    // Set DLB to false for this city.
     fn clear_dlb(&mut self, city: CityIndex) {
         self.dont_look_bits[city.get()] = false;
     }
 
+    // Set DLB to true for this city.
     fn set_dlb(&mut self, city: CityIndex) {
         self.dont_look_bits[city.get()] = true;
     }
@@ -589,6 +593,137 @@ impl Tour {
             }
         }
     }
+
+    pub fn three_opt_dlb(&mut self, distances: &SquareMatrix<u32>) {
+        let mut locally_optimal = false;
+        let len = self.number_of_cities();
+
+        dbg!();
+
+        'outermost: while !locally_optimal {
+            locally_optimal = true;
+            for preliminary_city_1_pos in (0..len).map(TourIndex::new) {
+                let first_city = self.cities[preliminary_city_1_pos.get()];
+                if self.is_dlb_set(first_city) {
+                    continue;
+                }
+
+                for city_1_pos in [
+                    preliminary_city_1_pos,
+                    preliminary_city_1_pos.wrapping_add(len - 1, len),
+                ] {
+                    let (x1, x2) = self.get_subsequent_pair(city_1_pos);
+
+                    // If either of the first two cities has DLB set, skip them.
+                    if self.is_dlb_set(x1) || self.is_dlb_set(x2) {
+                        continue;
+                    }
+
+                    for city_2_pos in (0..len).map(TourIndex::new) {
+                        let (y1, y2) = self.get_subsequent_pair(city_2_pos);
+
+                        // Don't select the same or subsequent cities as outer loop.
+                        if x1 == y1 || x2 == y1 || y2 == x1 {
+                            continue;
+                        }
+
+                        // Examine 2-opt case, we only need two cities for it.
+                        let expected_gain = Self::gain_from_2_opt(x1, x2, y1, y2, distances);
+                        if expected_gain > 0 {
+                            self.make_3_opt_move(
+                                preliminary_city_1_pos,
+                                city_2_pos,
+                                city_2_pos,
+                                ThreeOptReconnectionCase::RevA_B_C,
+                                expected_gain as u32,
+                            );
+
+                            // Improvement has been found, look for next.
+                            locally_optimal = false;
+                            // Clear DLB for involved cities.
+                            self.clear_dlb(x1);
+                            self.clear_dlb(x2);
+                            self.clear_dlb(y1);
+                            self.clear_dlb(y2);
+
+                            continue 'outermost;
+                        }
+
+                        for city_3_pos in (0..len).map(TourIndex::new) {
+                            let (z1, z2) = self.get_subsequent_pair(city_3_pos);
+
+                            // Don't select the same cities as outer loops.
+                            if x1 == z1 || y1 == z1 {
+                                continue;
+                            }
+
+                            // Second city must be between first and third.
+                            if !Self::between(city_1_pos, city_2_pos, city_3_pos) {
+                                continue;
+                            }
+
+                            for reconnection_case in [
+                                ThreeOptReconnectionCase::RevA_B_RevC,
+                                ThreeOptReconnectionCase::RevA_RevB_RevC,
+                            ] {
+                                let expected_gain = Self::gain_from_3_opt(
+                                    x1,
+                                    x2,
+                                    y1,
+                                    y2,
+                                    z1,
+                                    z2,
+                                    reconnection_case,
+                                    distances,
+                                );
+
+                                if expected_gain > 0 {
+                                    self.make_3_opt_move(
+                                        city_1_pos,
+                                        city_2_pos,
+                                        city_3_pos,
+                                        reconnection_case,
+                                        expected_gain as u32,
+                                    );
+
+                                    // Improvement has been found, look for next.
+                                    locally_optimal = false;
+                                    // Clear DLB for involved cities.
+                                    self.clear_dlb(x1);
+                                    self.clear_dlb(x2);
+                                    self.clear_dlb(y1);
+                                    self.clear_dlb(y2);
+                                    self.clear_dlb(z1);
+                                    self.clear_dlb(z2);
+
+                                    continue 'outermost;
+                                }
+                            }
+                        }
+                    }
+                }
+                // No moves have been found for this city, set DLB for it.
+                self.set_dlb(first_city);
+            }
+        }
+    }
+
+    // Returns true if x is between a and b in the tour:
+    // we start at position a in the tour (in forward direction),
+    // and x is between a and b if we encounter it sooner than b.
+    fn between(a: TourIndex, x: TourIndex, b: TourIndex) -> bool {
+        if b > a {
+            // x is simply between a and b
+            (x > a) && (x < b)
+        } else if b < a {
+            // b is before a in the tour, so we need to take into account
+            // that x can be more than a or less than b
+            (x > a) || (x < b)
+        } else {
+            // b == a
+            false
+        }
+    }
 }
 
 // Segments a, b, c are connected by paths that we are replacing.
@@ -605,9 +740,13 @@ impl Tour {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum ThreeOptReconnectionCase {
+    // Noop.
     A_B_C = 0,
+    // Equivalent to 2-opt move with x1, x2 the same, y1 = z1, y2 = z2.
     RevA_B_C = 1,
+    // Equivalent to 2-opt move with y1, y2 the same, x1 = z1, x2 = z2.
     A_B_RevC = 2,
+    // Equivalent to 2-opt move with x1, x2, y1, y2 the same.
     A_RevB_C = 3,
     A_RevB_RevC = 4,
     RevA_RevB_C = 5,
