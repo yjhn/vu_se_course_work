@@ -1,4 +1,4 @@
-// Allow dead code for now ot not get overwhelmed by warnings.
+// Allow dead code for now to not get overwhelmed by warnings.
 #![allow(dead_code)]
 
 mod arguments;
@@ -11,14 +11,14 @@ mod tour;
 mod tsp_problem;
 mod tsp_solver;
 
-use std::{env, fmt::Display, path::Path};
+use std::{fmt::Display, path::Path};
 
 use clap::Parser;
 use mpi::{
     topology::{Process, SystemCommunicator},
     traits::{Communicator, Root},
 };
-use rand::{rngs::SmallRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng};
 
 use crate::{arguments::Args, tsp_solver::TspSolver};
 
@@ -37,7 +37,7 @@ mod config {
     pub const BENCHMARK: bool = true;
     // Benchmarking constants
     pub mod benchmark {
-        pub const MAX_GENERATIONS: u32 = 1000;
+        pub const MAX_GENERATIONS: u32 = 500;
         // As defined in the paper.
         pub const REPEAT_TIMES: u32 = 10;
         pub const POPULATION_SIZE: u32 = 128;
@@ -99,7 +99,7 @@ fn main() {
                 _ => panic!("Benchmark only works with att532, gr666, rat783 and pr1002"),
             };
 
-            benchmark::benchmark::<&str, SmallRng>(
+            benchmark::benchmark::<&str, config::MainRng>(
                 &path,
                 problem_name,
                 solution_length,
@@ -126,7 +126,7 @@ fn main() {
             // Separate random seed must be created for each run.
             let random_seed = initialize_random_seed(root_process, rank, is_root);
 
-            run::<&str, SmallRng>(
+            run::<&str, config::MainRng>(
                 &path,
                 algorithms[0],
                 config::EVOLUTION_GENERATION_COUNT,
@@ -155,15 +155,6 @@ fn initialize_random_seed(
         println!("Global random seed: {random_seed}");
     }
     random_seed
-}
-
-// All paths are given as the first argument to the exec, delimiter is ','.
-fn get_input_file_paths() -> Vec<String> {
-    let mut args = env::args();
-    // First arg is usually program path or empty.
-    args.next();
-    let paths = args.next().unwrap();
-    paths.split(',').map(|p| p.to_owned()).collect()
 }
 
 fn run<PD, R>(
