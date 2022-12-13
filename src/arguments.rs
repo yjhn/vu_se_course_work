@@ -1,5 +1,7 @@
 use clap::Parser;
 
+use crate::config;
+
 #[derive(Parser, Debug)]
 pub struct Args {
     #[arg(short, long, value_delimiter = ',')]
@@ -10,11 +12,11 @@ pub struct Args {
     /// True - run the benchmarks, false - find solutions to provided files.
     pub benchmark: bool,
 
-    #[arg(short, long, default_value_t = 500)]
+    #[arg(short, long, default_value_t = config::benchmark::MAX_GENERATIONS)]
     /// Maximum number of generations for obtaining the optimal solution.
     pub max_generations: u32,
 
-    #[arg(short, long, default_value_t = 10)]
+    #[arg(short, long, default_value_t = config::benchmark::REPEAT_TIMES)]
     /// Number of times to repeat the benchmark.
     pub benchmark_repeat_times: u32,
 
