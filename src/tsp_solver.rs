@@ -320,12 +320,12 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         self.probability_matrix.increase_probabilitities(&winner);
         self.probability_matrix.decrease_probabilitities(&loser);
         if winner.is_shorter_than(&self.best_tour) {
-            println!(
-                "New best tour length in generation {}: old {}, new {}",
-                self.current_generation,
-                self.best_tour.length(),
-                winner.length()
-            );
+            // println!(
+            //     "Best tour length improved in generation {}: old {}, new {}",
+            //     self.current_generation,
+            //     self.best_tour.length(),
+            //     winner.length()
+            // );
             self.best_tour = winner;
         }
 
@@ -370,12 +370,12 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         self.probability_matrix.decrease_probabilitities(&longer);
 
         if shorter.is_shorter_than(&self.best_tour) {
-            println!(
-                "Best tour length improved in generation {}: old {}, new {}",
-                self.current_generation,
-                self.best_tour.length(),
-                shorter.length()
-            );
+            // println!(
+            //     "Best tour length improved in generation {}: old {}, new {}",
+            //     self.current_generation,
+            //     self.best_tour.length(),
+            //     shorter.length()
+            // );
             self.best_tour = shorter;
         }
     }

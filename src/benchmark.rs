@@ -32,6 +32,10 @@ pub fn benchmark<PD, R>(
         if !Path::new("benchmark_results").exists() {
             fs::create_dir("benchmark_results").unwrap();
         }
+
+        println!("Problem file name: {path}");
+        println!("MPI processes: {}", world.size());
+        println!("Problem name: {problem_name}");
     }
 
     for a in algorithms {
@@ -67,10 +71,6 @@ pub fn benchmark<PD, R>(
             writeln!(file, "Problem file name: {path}").unwrap();
             writeln!(file, "Problem name: {problem_name}").unwrap();
             writeln!(file, "MPI processes: {}\n\n\n\n\n", world.size()).unwrap();
-
-            println!("Problem file name: {path}");
-            println!("Problem name: {problem_name}");
-            println!("MPI processes: {}", world.size());
         }
 
         // \n\n = record separator
