@@ -225,10 +225,12 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                 return (best_global_len, true, lengths_timings);
             } else if best_global_len < optimal_length {
                 // Sanity check.
-                println!(
-                    "Found tour shorter than best possible:\n{:?}",
+                if self.mpi.rank() == 0 {
+                    println!(
+                    "Found tour shorter than best possible. Best possible length: {optimal_length}, found length: {best_global_len}, tour cities:\n{:?}",
                     best_global.cities()
                 );
+                }
                 self.mpi.abort(2);
             }
         }

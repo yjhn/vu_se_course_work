@@ -77,14 +77,50 @@ impl TspProblem {
         for ind1 in 1..=city_count {
             for ind2 in (ind1 + 1)..=city_count {
                 let dist_f64 = tsp.weight(ind1, ind2);
-                let dist = nint(dist_f64);
+                // tsp.weight() returns 0.0 on error.
+                assert!(dist_f64 > 0.0);
+                // tsp.weight() returns unrounded distances. Distances are defined
+                // to be u32 in TSPLIB95 format, and rounding depends on edge weight type.
+                let dist = match tsp.weight_kind() {
+                    tspf::WeightKind::Explicit => unimplemented!(),
+                    tspf::WeightKind::Euc2d => nint(dist_f64),
+                    tspf::WeightKind::Euc3d => unimplemented!(),
+                    tspf::WeightKind::Max2d => unimplemented!(),
+                    tspf::WeightKind::Max3d => unimplemented!(),
+                    tspf::WeightKind::Man2d => unimplemented!(),
+                    tspf::WeightKind::Man3d => unimplemented!(),
+                    tspf::WeightKind::Ceil2d => unimplemented!(),
+                    tspf::WeightKind::Geo => dist_f64 as u32,
+                    tspf::WeightKind::Att => {
+                        let d = nint(dist_f64);
+                        if (d as f64) < dist_f64 {
+                            d + 1
+                        } else {
+                            d
+                        }
+                    }
+                    tspf::WeightKind::Xray1 => unimplemented!(),
+                    tspf::WeightKind::Xray2 => unimplemented!(),
+                    tspf::WeightKind::Custom => unimplemented!(),
+                    tspf::WeightKind::Undefined => unimplemented!(),
+                };
                 distances[(ind1 - 1, ind2 - 1)] = dist;
                 distances[(ind2 - 1, ind1 - 1)] = dist;
             }
         }
+        // let mut gr666_len = distances[(0, 665)];
+        // for i in 1..666 {
+        //     gr666_len += distances[(i - 1, i)];
+        // }
+        // assert_eq!(gr666_len, 423710);
 
         distances
     }
+}
+
+// Same as nint() function defined in TSPLIB95 format.
+fn nint(f: f64) -> u32 {
+    (f + 0.5) as u32
 }
 
 // Returns city distance matrix.
@@ -111,11 +147,6 @@ fn generate_cities(city_count: usize) -> (Vec<Point>, SquareMatrix<u32>) {
     }
 
     (cities, distances)
-}
-
-// Rounding the same way as nint() function defined in TSPLIB95 format.
-fn nint(f: f64) -> u32 {
-    (f + 0.5).round() as u32
 }
 
 #[derive(Debug, Clone, Copy)]
