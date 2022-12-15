@@ -2,7 +2,6 @@
 #![allow(dead_code)]
 
 mod arguments;
-mod bench;
 mod benchmark;
 mod matrix;
 mod probability_matrix;
