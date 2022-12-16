@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use std::ops::Range;
+use tspf::WeightKind;
 use tspf::{Tsp, TspBuilder};
 
 use rand::rngs::SmallRng;
@@ -82,16 +83,16 @@ impl TspProblem {
                 // tsp.weight() returns unrounded distances. Distances are defined
                 // to be u32 in TSPLIB95 format, and rounding depends on edge weight type.
                 let dist = match tsp.weight_kind() {
-                    tspf::WeightKind::Explicit => unimplemented!(),
-                    tspf::WeightKind::Euc2d => nint(dist_f64),
-                    tspf::WeightKind::Euc3d => unimplemented!(),
-                    tspf::WeightKind::Max2d => unimplemented!(),
-                    tspf::WeightKind::Max3d => unimplemented!(),
-                    tspf::WeightKind::Man2d => unimplemented!(),
-                    tspf::WeightKind::Man3d => unimplemented!(),
-                    tspf::WeightKind::Ceil2d => unimplemented!(),
-                    tspf::WeightKind::Geo => dist_f64 as u32,
-                    tspf::WeightKind::Att => {
+                    WeightKind::Explicit => unimplemented!(),
+                    WeightKind::Euc2d => nint(dist_f64),
+                    WeightKind::Euc3d => unimplemented!(),
+                    WeightKind::Max2d => unimplemented!(),
+                    WeightKind::Max3d => unimplemented!(),
+                    WeightKind::Man2d => unimplemented!(),
+                    WeightKind::Man3d => unimplemented!(),
+                    WeightKind::Ceil2d => unimplemented!(),
+                    WeightKind::Geo => dist_f64 as u32,
+                    WeightKind::Att => {
                         let d = nint(dist_f64);
                         if (d as f64) < dist_f64 {
                             d + 1
@@ -99,10 +100,10 @@ impl TspProblem {
                             d
                         }
                     }
-                    tspf::WeightKind::Xray1 => unimplemented!(),
-                    tspf::WeightKind::Xray2 => unimplemented!(),
-                    tspf::WeightKind::Custom => unimplemented!(),
-                    tspf::WeightKind::Undefined => unimplemented!(),
+                    WeightKind::Xray1 => unimplemented!(),
+                    WeightKind::Xray2 => unimplemented!(),
+                    WeightKind::Custom => unimplemented!(),
+                    WeightKind::Undefined => unimplemented!(),
                 };
                 distances[(ind1 - 1, ind2 - 1)] = dist;
                 distances[(ind2 - 1, ind1 - 1)] = dist;
