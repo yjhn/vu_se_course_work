@@ -99,83 +99,71 @@ impl Tour {
         rng: &mut impl Rng,
     ) -> Tour {
         let mut cities = Vec::with_capacity(city_count);
-        // Tracks whether each city is used. True = unused, false = used.
-        let mut available_cities = vec![true; city_count];
 
-        let starting_city = rng.gen_range(0..city_count);
-        cities.push(CityIndex::new(starting_city));
-        available_cities[starting_city] = false;
+        let mut available_cities_new: Vec<CityIndex> =
+            (0..city_count).map(CityIndex::new).collect();
+
+        let starting_city_idx = rng.gen_range(0..city_count);
+        let starting_city = CityIndex::new(starting_city_idx);
+        cities.push(starting_city);
+        // Remove starting city from available.
+        available_cities_new.swap_remove(starting_city_idx);
+
         // Keep track of the last city added to the tour.
         let mut last_added_city = starting_city;
+        let mut tour_length = 0;
 
-        // How many cities are still missing.
-        let mut cities_left = city_count - 1;
+        'outermost: while !available_cities_new.is_empty() {
+            // Reshuffle the cities before inserting each one.
+            available_cities_new.shuffle(rng);
 
-        'outermost: while cities_left > 0 {
-            // Allow trying to insert the city `cities_left` times, then,
-            // if still unsuccessful, insert the city with highest probability.
-            for _ in 0..(cities_left * 2) {
-                // Generate indices in unused cities only to avoid duplicates.
-                let index = rng.gen_range(1..=cities_left);
+            // Try to insert every city in random order.
+            for idx in 0..available_cities_new.len() {
+                let c = available_cities_new[idx];
                 let prob = rng.gen::<f64>();
-                // Check for unused cities and choose index-th unused city.
-                // optimized
-                // Find n-th 'true' in available_cities and try to insert it.
-                let mut available: usize = 0;
-                for (idx, unused) in available_cities.iter_mut().enumerate() {
-                    available += (*unused) as usize;
-                    if available == index {
-                        let (l, h) = order(last_added_city, idx);
-                        if prob <= probability_matrix[(h, l)] {
-                            let city = CityIndex::new(idx);
 
-                            cities.push(city);
-                            last_added_city = idx;
-                            // This causes false positive warning #[warn(clippy::mut_range_bound)]
-                            // It is false positive, because we don't intend
-                            // to affect the loop count of the outer `for`.
-                            cities_left -= 1;
-                            // Mark this city as used.
-                            *unused = false;
-                            continue 'outermost;
-                        } else {
-                            break;
-                        }
-                    }
+                let (l, h) = order(c, last_added_city);
+                if prob <= probability_matrix[(h, l)] {
+                    cities.push(c);
+                    available_cities_new.swap_remove(idx);
+                    last_added_city = c;
+                    tour_length += distances[(h.get(), l.get())];
+
+                    continue 'outermost;
                 }
             }
 
             // If the control flow reaches here, insert city with highest prob.
-            let (mut max_prob, mut max_prob_city, mut max_prob_dist) = (0.0, 0, u32::MAX);
+            let (mut max_prob, mut max_prob_city, mut max_prob_city_idx, mut max_prob_dist) =
+                (0.0, CityIndex::new(0), 0, u32::MAX);
 
-            for (idx, unused) in available_cities.iter_mut().enumerate() {
-                if *unused {
-                    let (l, h) = order(last_added_city, idx);
-                    let prob = probability_matrix[(h, l)];
-                    if prob > max_prob {
-                        let dist = distances[(h, l)];
-                        (max_prob, max_prob_city, max_prob_dist) = (prob, idx, dist);
-                    } else if prob == max_prob {
-                        // If probabilities are the same, insert nearer city.
-                        let dist = distances[(h, l)];
-                        if dist < max_prob_dist {
-                            (max_prob, max_prob_city, max_prob_dist) = (prob, idx, dist);
-                        }
+            for (idx, c) in available_cities_new.iter().copied().enumerate() {
+                let (l, h) = order(last_added_city, c);
+                let prob = probability_matrix[(h, l)];
+                if prob > max_prob {
+                    let dist = distances[(h.get(), l.get())];
+                    (max_prob, max_prob_city, max_prob_city_idx, max_prob_dist) =
+                        (prob, c, idx, dist);
+                } else if prob == max_prob {
+                    // If probabilities are the same, insert nearer city.
+                    let dist = distances[(h.get(), l.get())];
+                    if dist < max_prob_dist {
+                        (max_prob, max_prob_city, max_prob_city_idx, max_prob_dist) =
+                            (prob, c, idx, dist);
                     }
                 }
             }
-            cities.push(CityIndex::new(max_prob_city));
-            // Mark the city as used.
-            available_cities[max_prob_city] = false;
-            cities_left -= 1;
+            cities.push(max_prob_city);
+            tour_length += max_prob_dist;
+            available_cities_new.swap_remove(max_prob_city_idx);
         }
 
         // assert_eq!(cities.len(), city_count);
         // Check that there are no duplicates.
-        // println!("{:?}", cities);
         // assert!(!(1..cities.len()).any(|i| cities[i..].contains(&cities[i - 1])));
 
-        let tour_length = cities.calculate_tour_length(distances);
+        // Add distance from last to first city.
+        tour_length += distances[(cities[0].get(), cities.last().unwrap().get())];
         let dont_look_bits = vec![false; city_count];
 
         Tour {
