@@ -126,8 +126,8 @@ impl Tour {
                 if prob <= probability_matrix[(h, l)] {
                     cities.push(c);
                     available_cities_new.swap_remove(idx);
+                    tour_length += distances[(last_added_city.get(), c.get())];
                     last_added_city = c;
-                    tour_length += distances[(h.get(), l.get())];
 
                     continue 'outermost;
                 }
@@ -155,6 +155,7 @@ impl Tour {
             }
             cities.push(max_prob_city);
             tour_length += max_prob_dist;
+            last_added_city = max_prob_city;
             available_cities_new.swap_remove(max_prob_city_idx);
         }
 
@@ -164,6 +165,7 @@ impl Tour {
 
         // Add distance from last to first city.
         tour_length += distances[(cities[0].get(), cities.last().unwrap().get())];
+        assert_eq!(tour_length, cities.calculate_tour_length(distances));
         let dont_look_bits = vec![false; city_count];
 
         Tour {
