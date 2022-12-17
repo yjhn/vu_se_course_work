@@ -23,14 +23,15 @@ pub fn benchmark<PD, R>(
     population_size: u32,
     exchange_generations: &[u32],
     algorithms: &[Algorithm],
+    results_dir: &str,
 ) where
     PD: AsRef<Path> + Display,
     R: Rng + SeedableRng,
 {
     if is_root {
         // Create benchmark results directory.
-        if !Path::new("benchmark_results").exists() {
-            fs::create_dir("benchmark_results").unwrap();
+        if !Path::new(results_dir).exists() {
+            fs::create_dir(results_dir).unwrap();
         }
 
         println!("Problem file name: {path}");
@@ -41,7 +42,7 @@ pub fn benchmark<PD, R>(
     for a in algorithms {
         let problem = TspProblem::from_file(&path);
         let save_file_name = format!(
-            "benchmark_results/bm_{problem_name}_alg_{a}_{}_cpus.out",
+            "{results_dir}/bm_{problem_name}_alg_{a}_{}_cpus.out",
             world.size()
         );
 

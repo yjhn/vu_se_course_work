@@ -41,6 +41,7 @@ mod config {
         pub const REPEAT_TIMES: u32 = 10;
         pub const POPULATION_SIZE: u32 = 128;
         pub const EXCHANGE_GENERATIONS: [u32; 4] = [4, 8, 16, 32];
+        pub const RESULTS_DIR: &str = "benchmark_results";
     }
 
     pub mod solution_length {
@@ -68,8 +69,9 @@ fn main() {
         files,
         max_generations,
         benchmark,
-        benchmark_repeat_times,
+        bench_repeat_times,
         algorithms,
+        bench_results_dir,
     } = arguments::Args::parse();
 
     let algorithms: Vec<Algorithm> = algorithms
@@ -81,7 +83,7 @@ fn main() {
         println!("TSP files:\n{files:?}");
         println!("Max generations: {max_generations}");
         println!("Benchmark: {benchmark}");
-        println!("Benchmark repeat times: {benchmark_repeat_times}");
+        println!("Benchmark repeat times: {bench_repeat_times}");
         println!("Algorithms: {algorithms:?}");
     }
 
@@ -107,10 +109,11 @@ fn main() {
                 root_process,
                 rank,
                 is_root,
-                benchmark_repeat_times,
+                bench_repeat_times,
                 POPULATION_SIZE,
                 &EXCHANGE_GENERATIONS,
                 &algorithms,
+                &bench_results_dir,
             );
         }
     } else {
@@ -230,7 +233,7 @@ impl TryFrom<&str> for Algorithm {
 }
 
 // Returns (low, high).
-pub fn order(a: usize, b: usize) -> (usize, usize) {
+pub fn order<T: Ord>(a: T, b: T) -> (T, T) {
     if a < b {
         (a, b)
     } else {

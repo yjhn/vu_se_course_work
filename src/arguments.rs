@@ -18,8 +18,11 @@ pub struct Args {
 
     #[arg(short, long, default_value_t = config::benchmark::REPEAT_TIMES)]
     /// Number of times to repeat the benchmark.
-    pub benchmark_repeat_times: u32,
+    pub bench_repeat_times: u32,
 
     #[arg(long, short, value_delimiter = ',')]
     pub algorithms: Vec<String>,
+
+    #[arg(long, default_value_t = config::benchmark::RESULTS_DIR.to_owned())]
+    pub bench_results_dir: String,
 }
