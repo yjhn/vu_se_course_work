@@ -60,3 +60,14 @@ impl Index<(usize, usize)> for ProbabilityMatrix {
         &self.0[(x, y)]
     }
 }
+
+// First number must be higher than second.
+impl Index<(CityIndex, CityIndex)> for ProbabilityMatrix {
+    type Output = f64;
+
+    fn index(&self, (x, y): (CityIndex, CityIndex)) -> &Self::Output {
+        debug_assert!(x > y);
+
+        &self.0[(x.get(), y.get())]
+    }
+}
