@@ -165,7 +165,7 @@ impl Tour {
 
         // Add distance from last to first city.
         tour_length += distances[(cities[0].get(), cities.last().unwrap().get())];
-        assert_eq!(tour_length, cities.calculate_tour_length(distances));
+        // assert_eq!(tour_length, cities.calculate_tour_length(distances));
         let dont_look_bits = vec![false; city_count];
 
         Tour {
