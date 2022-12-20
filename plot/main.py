@@ -1,6 +1,9 @@
-import sys
+import os
+import argparse
 from matplotlib import pyplot as plt
 import numpy as np
+
+# test case = tsp problem file
 
 ## Results file format:
 ## header (not relevant to this script):
@@ -20,7 +23,7 @@ import numpy as np
 ## another record, but repeat_time + 1
 ## repeat n times
 ## end record group
-# \n\n\n
+# \n\n\n (effectively 5 because these come after end record)
 ## another record group, different exc_gen
 ## n record groups
 ## end record groups
@@ -39,6 +42,12 @@ DIAGRAM_TITLES = {\
     "Cga + 3-opt": "Cga 3-opt algoritmo trumpiausias kelias"\
 }
 
+ALGO_TO_FILE_NAME_PART = {
+    "cga": "Cga",
+    "cga2opt": "Cga + 2-opt",
+    "cga3opt": "Cga + 3-opt"
+}
+
 PLOT_PREFIX = ""
 
 class RecordMetaInfo:
@@ -52,11 +61,75 @@ class RecordMetaInfo:
         self.reached_optimal_length = fields[4]
         self.reached_length = fields[5]
 
+class Record:
+    def __init__(self, record):
+        # record is made up of meta info line, lengths, gen times, opt times
+        parts = record.split("\n")
+        self.meta = RecordMetaInfo(parts[0])
+        self.lengths = parts[1]
+        self.gen_times = parts[2]
+        self.opt_times = parts[3] TODO: parse as arrays
+
 
 def main():
-    file_names = get_file_names()
+    parser = argparse.ArgumentParser(prog = "plot")
+    # directory is where benchmark results files are stored
+    # the program itself will decide which files it needs
+    parser.add_argument("-d", "--directory", required=True)
+    parser.add_argument("-a", "--algorithms",
+                        choices=["cga", "cga2opt", "cga3opt"],
+                        nargs="+",
+                        required=False,
+                        default=["cga", "cga2opt", "cga3opt"])
+    parser.add_argument("-c", "--core-counts",
+                        type=int,
+                        choices=[1, 2, 4, 8],
+                        nargs="+",
+                        required=False,
+                        default=[1, 2, 4, 8])
+    parser.add_argument("-t", "--test-cases",
+                        choices=["att532", "gr666", "rat783", "pr1002"],
+                        nargs="+",
+                        required=False,
+                        default=["att532", "gr666", "rat783", "pr1002"])
+    # will average over the given exchange generations as they
+    # do not make any meaningful difference
+    parser.add_argument("-e", "--exchange-generations",
+                        choices=[4, 8, 16, 32],
+                        type=int,
+                        nargs="+",
+                        required=False,
+                        default=[4, 8, 16, 32])
+    # show results after this many generations
+    # TODO: use this argument
+    parser.add_argument("-g", "--generation-count",
+                        type=int,
+                        required=False,
+                        default=500)
+    args = parser.parse_args()
+    directory = args.directory
+    if not directory.endswith("/"):
+        directory += "/"
+    algos = list(map(lambda x: ALGO_TO_FILE_NAME_PART[x], args.algorithms))
+    core_counts = args.core_counts
+    test_cases = args.test_cases
+    max_generations = args.generation_count
+    exc_gens = args.exchange_generations
+    # for t in test_cases:
+    #     for a in algos:
+    #         for c in core_counts:
+    #             print(make_file_name(directory, t, a, c))
+    
+    for a in algos:
+        print("Processing algorithm: " + a)
+        plot_cores_diff_from_opt_test_cases(directory, core_counts, test_cases, a, exc_gens, max_generations)
+        
+    
+    return
+    
     x_axis_values = np.arange(1, 501)
-    for file_name in file_names:
+    for name in os.listdir(directory):
+        file_name = directory + name
         print("Processing file '" + file_name + "'")
         
         with open(file_name, "r") as file:
@@ -131,24 +204,47 @@ def one_exchange_gen_avg(record_group):
         sum_total = records_gen_lengths[0][i]
         for j in range(1, rec_gen_len_len):
             sum_total += records_gen_lengths[j][i]
-        # sum_total = records_gen_lengths[0][i] +\
-        #     records_gen_lengths[1][i] +\
-        #     records_gen_lengths[2][i] +\
-        #     records_gen_lengths[3][i] +\
-        #     records_gen_lengths[4][i] +\
-        #     records_gen_lengths[5][i] +\
-        #     records_gen_lengths[6][i] +\
-        #     records_gen_lengths[7][i] +\
-        #     records_gen_lengths[8][i] +\
-        #     records_gen_lengths[9][i]
         avg = sum_total / rec_gen_len_len
         avg_gen_lengths.append(avg)
     
     return (records_meta_info, avg_gen_lengths)
 
-# First argument is program name or otherwise useless.
-def get_file_names():
-    return sys.argv[1:]
+def separate_header(text):
+    parts = text.split("\n\n\n\n\n\n")
+    return (parts[0], parts[1])
+
+def separate_by_exchange_gens(text):
+    parts = text.split("\n\n\n\n\n")
+    assert(len(exchange_gens_split[-1]) == 0)
+    return parts[:-1]
+
+def separate_repeat_runs(text):
+    parts = text.split("\n\n")
+    return parts
+
+
+
+# dir must end with '/'
+def make_file_name(dir, test_case, algo, cpus):
+    return dir + "bm_" + test_case + "_alg_" + algo + "_" + str(cpus) + "_cpus.out"
+
+# Core count on X axis, difference from optimal on Y,
+# different test cases in one plot.
+def plot_cores_diff_from_opt_test_cases(dir, core_counts, test_cases, algo, exc_gens, max_gens):
+    # Find out which files we need.
+    for t in test_cases:
+        for c in core_counts:
+            print(make_file_name(dir, t, algo, c))
+
+# Core count on X axis, difference from optimal on Y,
+# plots single test case, varies generations count.
+def plot_cores_diff_from_opt_generations(test_case, algo):
+    TODO
+
+# Core count on X axis, difference from optimal on Y,
+# plots multiple algorithms ans a single test case.
+def plot_cores_diff_from_opt_multi_alg(test_case, algos):
+    TODO
 
 if __name__ == "__main__":
     main()
