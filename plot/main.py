@@ -87,16 +87,18 @@ def main():
             exc_gen_number = meta_info[0].exchange_generations
             # Plot the percentage difference from the optimal tour.
             diff =  map(lambda x: (x - optimal_length) / optimal_length * 100.0, exc_gen_avg)
-            plt.plot(x_axis_values, list(diff), label="att532, " + "F_mig = " + exc_gen_number)
+            plt.plot(x_axis_values, list(diff), label=problem_name + ", " + "F_mig = " + exc_gen_number)
             plt.legend(loc="upper right")
             # plt.title(DIAGRAM_TITLES[algorithm] + ", F_mig = " + exc_gen_number)
             plt.title(DIAGRAM_TITLES[algorithm])
             plt.xlabel("genetinio algoritmo karta")
             plt.ylabel("skirtumas nuo optimalaus kelio, %")
             # plt.show()
-            plt.savefig(plot_file_base_name + exc_gen_number + ".png", format="png", dpi=220)
+            # plt.savefig(plot_file_base_name + exc_gen_number + ".png", format="png", dpi=220)
             # Clears current plot, otherwise they stack from different loop iterations.
             # plt.clf()
+        plt.savefig(plot_file_base_name + exc_gen_number + ".png", format="png", dpi=220)
+        plt.clf()
 
 def percent_diff_from_optimal(x, optimal):
     diff = x - optimal
@@ -123,19 +125,23 @@ def one_exchange_gen_avg(record_group):
         records_gen_lengths.append(gen_lengths)
     
     # Average the generation lengths
+    rec_gen_len_len = len(records_gen_lengths)
     avg_gen_lengths = []
     for i in range(0, 500):
-        sum_total = records_gen_lengths[0][i] +\
-            records_gen_lengths[1][i] +\
-            records_gen_lengths[2][i] +\
-            records_gen_lengths[3][i] +\
-            records_gen_lengths[4][i] +\
-            records_gen_lengths[5][i] +\
-            records_gen_lengths[6][i] +\
-            records_gen_lengths[7][i] +\
-            records_gen_lengths[8][i] +\
-            records_gen_lengths[9][i]
-        avg = sum_total / 10
+        sum_total = records_gen_lengths[0][i]
+        for j in range(1, rec_gen_len_len):
+            sum_total += records_gen_lengths[j][i]
+        # sum_total = records_gen_lengths[0][i] +\
+        #     records_gen_lengths[1][i] +\
+        #     records_gen_lengths[2][i] +\
+        #     records_gen_lengths[3][i] +\
+        #     records_gen_lengths[4][i] +\
+        #     records_gen_lengths[5][i] +\
+        #     records_gen_lengths[6][i] +\
+        #     records_gen_lengths[7][i] +\
+        #     records_gen_lengths[8][i] +\
+        #     records_gen_lengths[9][i]
+        avg = sum_total / rec_gen_len_len
         avg_gen_lengths.append(avg)
     
     return (records_meta_info, avg_gen_lengths)
