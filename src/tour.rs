@@ -1,5 +1,6 @@
 use std::fmt::Display;
 use std::io::Write;
+use std::time::Instant;
 use std::{fs::File, io::BufWriter, path::Path, slice::Windows};
 
 use rand::seq::SliceRandom;
@@ -588,14 +589,23 @@ impl Tour {
         let mut locally_optimal = false;
         let len = self.number_of_cities();
 
+        // let timer = Instant::now();
         'outermost: while !locally_optimal {
             locally_optimal = true;
+            // if timer.elapsed().as_secs() > 60 {
+            //     println!(
+            //         "3-opt took more than 60 seconds, aborting. Tour cities: {:?}",
+            //         self.cities
+            //     );
+            //     return;
+            // }
             for preliminary_city_1_pos in (0..len).map(TourIndex::new) {
                 let first_city = self.cities[preliminary_city_1_pos.get()];
                 if self.is_dlb_set(first_city) {
                     continue;
                 }
 
+                // Start either from the chosen city or the one before it.
                 for city_1_pos in [
                     preliminary_city_1_pos,
                     preliminary_city_1_pos.wrapping_add(len - 1, len),
@@ -619,7 +629,7 @@ impl Tour {
                         let expected_gain = Self::gain_from_2_opt(x1, x2, y1, y2, distances);
                         if expected_gain > 0 {
                             self.make_3_opt_move(
-                                preliminary_city_1_pos,
+                                city_1_pos,
                                 city_2_pos,
                                 city_2_pos,
                                 ThreeOptReconnectionCase::RevA_B_C,
@@ -694,6 +704,9 @@ impl Tour {
                 self.set_dlb(first_city);
             }
         }
+        // if timer.elapsed().as_secs() > 5 {
+        //     println!("3-opt time: {} ms", timer.elapsed().as_millis());
+        // }
     }
 
     // Returns true if x is between a and b in the tour:
