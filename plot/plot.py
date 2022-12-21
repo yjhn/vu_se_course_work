@@ -48,27 +48,72 @@ ALGO_TO_FILE_NAME_PART = {
     "cga3opt": "Cga + 3-opt"
 }
 
-PLOT_PREFIX = ""
+# controls plot image resolution
+PLOT_DPI = 220
+
+# controls where in the plot the legend is placed
+PLOT_LEGEND_LOCATION = "upper right"
 
 class RecordMetaInfo:
     def __init__(self, meta_info_line):
         # alg,exc_gen,repeat_time,gens,is_optimum_reached,reached_length
         fields = meta_info_line.split(',')
         self.algorithm = fields[0]
-        self.exchange_generations = fields[1]
-        self.repeat_time = fields[2]
-        self.generations = fields[3]
+        self.exchange_generations = int(fields[1])
+        self.repeat_time = int(fields[2])
+        self.generations = int(fields[3])
         self.reached_optimal_length = fields[4]
-        self.reached_length = fields[5]
+        self.reached_length = int(fields[5])
 
 class Record:
     def __init__(self, record):
         # record is made up of meta info line, lengths, gen times, opt times
         parts = record.split("\n")
+        assert(len(parts) == 4)
         self.meta = RecordMetaInfo(parts[0])
-        self.lengths = parts[1]
-        self.gen_times = parts[2]
-        self.opt_times = parts[3] TODO: parse as arrays
+        self.lengths = parse_int_list(parts[1])
+        self.gen_times = parse_int_list(parts[2])
+        self.opt_times = parse_int_list(parts[3])
+
+# All the runs with the same exchange_generations
+class RecordGroup:
+    def __init__(self, record_group):
+        self.records = []
+        for rec in separate_repeat_runs(record_group):
+            self.records.append(Record(rec))
+        self.record_count = len(self.records)
+        self.exc_gens = self.records[0].meta.exchange_generations
+
+class FileMetaInfo:
+    def __init__(self, header, file_name):
+        header_lines = header.split('\n')
+        assert(len(header_lines) == 3)
+        self.problem_name = header_lines[1].split(": ")[1]
+        self.optimal_length = OPTIMAL_LENGTHS[self.problem_name]
+        self.cpu_count = header_lines[2].split(": ")[1]
+        self.algorithm = file_name.split("alg_")[1].split("_")[0]
+
+def parse_int_list(text, separator=','):
+    parts = text.split(separator)
+    assert(len(parts[-1]) == 0)
+    parts = parts[:-1]
+    ints = list(map(int, parts))
+    return ints
+
+# Parse file content.
+def parse(file_name):
+    with open(file_name, "r") as file:
+        full_content = file.read()
+    
+    (header, content) = separate_header(full_content)
+    file_meta_info = FileMetaInfo(header, file_name)
+    
+    record_groups_text = separate_by_exchange_gens(content)
+    record_groups = []
+    for r in record_groups_text:
+        record_groups.append(RecordGroup(r))
+    
+    return (file_meta_info, record_groups)
 
 
 def main():
@@ -101,7 +146,6 @@ def main():
                         required=False,
                         default=[4, 8, 16, 32])
     # show results after this many generations
-    # TODO: use this argument
     parser.add_argument("-g", "--generation-count",
                         type=int,
                         required=False,
@@ -120,58 +164,45 @@ def main():
     #         for c in core_counts:
     #             print(make_file_name(directory, t, a, c))
     
-    for a in algos:
-        print("Processing algorithm: " + a)
-        plot_cores_diff_from_opt_test_cases(directory, core_counts, test_cases, a, exc_gens, max_generations)
-        
-    
-    return
+#     for a in algos:
+#         print("Processing algorithm: " + a)
+#         plot_cores_diff_from_opt_test_cases(directory, core_counts, test_cases, a, exc_gens, max_generations)
+#         
+#     
+#     return
     
     x_axis_values = np.arange(1, 501)
     for name in os.listdir(directory):
         file_name = directory + name
         print("Processing file '" + file_name + "'")
         
-        with open(file_name, "r") as file:
-            full_content = file.read()
+        (meta_info, exchange_gens) = parse(file_name)
         
-        content = full_content.split("\n\n\n\n\n\n")
-        header = content[0]
-        header_lines = header.split('\n')
-        problem_name = header_lines[1].split(": ")[1]
-        optimal_length = OPTIMAL_LENGTHS[problem_name]
-        cpu_count = header_lines[2].split(": ")[1]
-        algorithm = file_name.split("alg_")[1].split("_")[0]
-        print("problem name: " + problem_name)
-        print("optimal length: " + str(optimal_length))
-        print("algorithm: " + algorithm)
-        print("cpu count: " + cpu_count)
-        content = content[1]
-        # In theory recor group sepearator is "\n\n\n", but in practice
-        # after last record in record group "\n\n" is written,
-        # so true record group separator is "\n\n\n\n\ns".
-        exchange_gens_split = content.split("\n\n\n\n\n")
-        assert(len(exchange_gens_split[-1]) == 0)
-        # Discard empty end.
-        exchange_gens = exchange_gens_split[:-1]
-        plot_file_base_name = PLOT_PREFIX + file_name.split('.')[0].split('/')[-1] + "_"
+        problem_name = meta_info.problem_name
+        optimal_length = meta_info.optimal_length
+        algorithm = meta_info.algorithm
+        plot_file_base_name = file_name.split('.')[0].split('/')[-1]
+        y_values = []
+        labels = []
+        title = DIAGRAM_TITLES[algorithm]
+        xlabel = "genetinio algoritmo karta"
+        ylabel = "skirtumas nuo optimalaus kelio, %"
+        file_name = plot_file_base_name
         for exc in exchange_gens:
             (meta_info, exc_gen_avg) = one_exchange_gen_avg(exc)
-            exc_gen_number = meta_info[0].exchange_generations
             # Plot the percentage difference from the optimal tour.
             diff =  map(lambda x: (x - optimal_length) / optimal_length * 100.0, exc_gen_avg)
-            plt.plot(x_axis_values, list(diff), label=problem_name + ", " + "F_mig = " + exc_gen_number)
-            plt.legend(loc="upper right")
-            # plt.title(DIAGRAM_TITLES[algorithm] + ", F_mig = " + exc_gen_number)
-            plt.title(DIAGRAM_TITLES[algorithm])
-            plt.xlabel("genetinio algoritmo karta")
-            plt.ylabel("skirtumas nuo optimalaus kelio, %")
-            # plt.show()
-            # plt.savefig(plot_file_base_name + exc_gen_number + ".png", format="png", dpi=220)
-            # Clears current plot, otherwise they stack from different loop iterations.
-            # plt.clf()
-        plt.savefig(plot_file_base_name + exc_gen_number + ".png", format="png", dpi=220)
-        plt.clf()
+            y_values.append(list(diff))
+            labels.append(problem_name + ", " + "F_mig = " + str(exc.exc_gens))
+
+        plot_and_save(x_values=x_axis_values,
+             y_values=y_values,
+             labels=labels,
+             title=title,
+             xlabel=xlabel,
+             ylabel=ylabel,
+             file_name=file_name
+             )
 
 def percent_diff_from_optimal(x, optimal):
     diff = x - optimal
@@ -179,23 +210,12 @@ def percent_diff_from_optimal(x, optimal):
 
 def one_exchange_gen_avg(record_group):
     # Argument: record group as defined above
-    records = record_group.split("\n\n")
+    # records = separate_repeat_runs(record_group)
     records_meta_info = []
     records_gen_lengths = []
-    for record in records:
-        # record as defined above
-        # for now we don't care about the timings
-        lines = record.split("\n")
-        # first line is meta info
-        records_meta_info.append(RecordMetaInfo(lines[0]))
-        
-        # second line is best length after each generation
-        gen_lengths_text_split = lines[1].split(',')
-        assert(len(gen_lengths_text_split[-1]) == 0)
-        # Discard empty end.
-        gen_lengths_text = gen_lengths_text_split[:-1]
-        gen_lengths = list(map(int, gen_lengths_text))
-        records_gen_lengths.append(gen_lengths)
+    for record in record_group.records:
+        records_meta_info.append(record.meta)
+        records_gen_lengths.append(record.lengths)
     
     # Average the generation lengths
     rec_gen_len_len = len(records_gen_lengths)
@@ -214,15 +234,30 @@ def separate_header(text):
     return (parts[0], parts[1])
 
 def separate_by_exchange_gens(text):
+    # In theory record group sepearator is "\n\n\n", but in practice
+    # after last record in record group "\n\n" is written,
+    # so true record group separator is "\n\n\n\n\n".
     parts = text.split("\n\n\n\n\n")
-    assert(len(exchange_gens_split[-1]) == 0)
+    assert(len(parts[-1]) == 0)
     return parts[:-1]
 
 def separate_repeat_runs(text):
     parts = text.split("\n\n")
     return parts
 
-
+# keyword args should be used
+# x_values = array
+# y_values = array of arrays
+# labels = array of labels, len(labels) == len(y_values)
+def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name):
+    for (y, l) in zip(y_values, labels):
+        plt.plot(x_values, y, label=l)
+    plt.legend(loc=PLOT_LEGEND_LOCATION)
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.savefig(file_name + ".png", format="png", dpi=PLOT_DPI)
+    plt.clf()
 
 # dir must end with '/'
 def make_file_name(dir, test_case, algo, cpus):
