@@ -86,6 +86,7 @@ class RecordGroup:
 
 class FileMetaInfo:
     def __init__(self, header, file_name):
+        self.file_name = file_name
         header_lines = header.split('\n')
         assert(len(header_lines) == 3)
         self.problem_name = header_lines[1].split(": ")[1]
@@ -114,6 +115,22 @@ def parse(file_name):
         record_groups.append(RecordGroup(r))
     
     return (file_meta_info, record_groups)
+
+def separate_header(text):
+    parts = text.split("\n\n\n\n\n\n")
+    return (parts[0], parts[1])
+
+def separate_by_exchange_gens(text):
+    # In theory record group sepearator is "\n\n\n", but in practice
+    # after last record in record group "\n\n" is written,
+    # so true record group separator is "\n\n\n\n\n".
+    parts = text.split("\n\n\n\n\n")
+    assert(len(parts[-1]) == 0)
+    return parts[:-1]
+
+def separate_repeat_runs(text):
+    parts = text.split("\n\n")
+    return parts
 
 
 def main():
@@ -164,53 +181,18 @@ def main():
     #         for c in core_counts:
     #             print(make_file_name(directory, t, a, c))
     
-#     for a in algos:
-#         print("Processing algorithm: " + a)
-#         plot_cores_diff_from_opt_test_cases(directory, core_counts, test_cases, a, exc_gens, max_generations)
-#         
-#     
-#     return
+    for a in algos:
+        print("Processing algorithm: " + a)
+        for e in exc_gens:
+            plot_cores_diff_from_opt_test_cases(directory, core_counts, test_cases, a, e, max_generations)
     
-    x_axis_values = np.arange(1, 501)
-    for name in os.listdir(directory):
-        file_name = directory + name
-        print("Processing file '" + file_name + "'")
-        
-        (meta_info, exchange_gens) = parse(file_name)
-        
-        problem_name = meta_info.problem_name
-        optimal_length = meta_info.optimal_length
-        algorithm = meta_info.algorithm
-        plot_file_base_name = file_name.split('.')[0].split('/')[-1]
-        y_values = []
-        labels = []
-        title = DIAGRAM_TITLES[algorithm]
-        xlabel = "genetinio algoritmo karta"
-        ylabel = "skirtumas nuo optimalaus kelio, %"
-        file_name = plot_file_base_name
-        for exc in exchange_gens:
-            (meta_info, exc_gen_avg) = one_exchange_gen_avg(exc)
-            # Plot the percentage difference from the optimal tour.
-            diff =  map(lambda x: (x - optimal_length) / optimal_length * 100.0, exc_gen_avg)
-            y_values.append(list(diff))
-            labels.append(problem_name + ", " + "F_mig = " + str(exc.exc_gens))
-
-        plot_and_save(x_values=x_axis_values,
-             y_values=y_values,
-             labels=labels,
-             title=title,
-             xlabel=xlabel,
-             ylabel=ylabel,
-             file_name=file_name
-             )
+    # plot_basic(directory)
 
 def percent_diff_from_optimal(x, optimal):
     diff = x - optimal
     return (diff / optimal) * 100.0
 
 def one_exchange_gen_avg(record_group):
-    # Argument: record group as defined above
-    # records = separate_repeat_runs(record_group)
     records_meta_info = []
     records_gen_lengths = []
     for record in record_group.records:
@@ -229,47 +211,101 @@ def one_exchange_gen_avg(record_group):
     
     return (records_meta_info, avg_gen_lengths)
 
-def separate_header(text):
-    parts = text.split("\n\n\n\n\n\n")
-    return (parts[0], parts[1])
-
-def separate_by_exchange_gens(text):
-    # In theory record group sepearator is "\n\n\n", but in practice
-    # after last record in record group "\n\n" is written,
-    # so true record group separator is "\n\n\n\n\n".
-    parts = text.split("\n\n\n\n\n")
-    assert(len(parts[-1]) == 0)
-    return parts[:-1]
-
-def separate_repeat_runs(text):
-    parts = text.split("\n\n")
-    return parts
-
 # keyword args should be used
 # x_values = array
 # y_values = array of arrays
 # labels = array of labels, len(labels) == len(y_values)
 def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name):
     for (y, l) in zip(y_values, labels):
-        plt.plot(x_values, y, label=l)
+        plt.plot(x_values, y, label=l, marker='o', linestyle='dashed')
     plt.legend(loc=PLOT_LEGEND_LOCATION)
     plt.title(title)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
-    plt.savefig(file_name + ".png", format="png", dpi=PLOT_DPI)
+    final_file_name = f"{file_name}.png"
+    print(f"saving plot: {final_file_name}")
+    plt.savefig(final_file_name, format="png", dpi=PLOT_DPI)
     plt.clf()
 
 # dir must end with '/'
-def make_file_name(dir, test_case, algo, cpus):
-    return dir + "bm_" + test_case + "_alg_" + algo + "_" + str(cpus) + "_cpus.out"
+def make_file_name(directory, test_case, algo, cpus):
+    return f"{directory}bm_{test_case}_alg_{algo}_{cpus}_cpus.out"
+
+def plot_basic(directory):
+    x_axis_values = np.arange(1, 501)
+    for name in os.listdir(directory):
+        file_name = directory + name
+        print(f"Processing file '{file_name}'")
+        
+        (meta_info, exchange_gens) = parse(file_name)
+        
+        problem_name = meta_info.problem_name
+        optimal_length = meta_info.optimal_length
+        algorithm = meta_info.algorithm
+        plot_file_base_name = file_name.split('.')[0].split('/')[-1]
+        y_values = []
+        labels = []
+        title = DIAGRAM_TITLES[algorithm]
+        xlabel = "genetinio algoritmo karta"
+        ylabel = "skirtumas nuo optimalaus kelio, %"
+        file_name = plot_file_base_name
+        for exc in exchange_gens:
+            (meta_info, exc_gen_avg) = one_exchange_gen_avg(exc)
+            # Plot the percentage difference from the optimal tour.
+            diff =  map(lambda x: (x - optimal_length) / optimal_length * 100.0, exc_gen_avg)
+            y_values.append(list(diff))
+            labels.append(f"{problem_name}, F_mig = {exc.exc_gens}")
+
+        plot_and_save(x_values=x_axis_values,
+             y_values=y_values,
+             labels=labels,
+             title=title,
+             xlabel=xlabel,
+             ylabel=ylabel,
+             file_name=file_name
+             )
+
 
 # Core count on X axis, difference from optimal on Y,
 # different test cases in one plot.
-def plot_cores_diff_from_opt_test_cases(dir, core_counts, test_cases, algo, exc_gens, max_gens):
+def plot_cores_diff_from_opt_test_cases(directory, core_counts, test_cases, algo, exc_gens, max_gens):
     # Find out which files we need.
+    title = f"{algo} skirtumas nuo optimalaus po {max_gens} kartų, F_mig = {exc_gens}"
+    x_values = [1, 2, 4, 8]
+    xlabel = "branduolių skaičius"
+    ylabel = "skirtumas nuo optimalaus, %"
+    plot_file_name = f"cores_diff_from_opt_test_cases_mgen_{max_gens}_egen_{exc_gens}_{algo}"
+    parsed_files = []
+    labels_all_test_cases = []
+    diffs_all_test_cases = []
     for t in test_cases:
+        labels_all_test_cases.append(t)
+        diffs_all_core_counts = []
         for c in core_counts:
-            print(make_file_name(dir, t, algo, c))
+            file_name = make_file_name(directory, t, algo, c)
+            (meta, data) = parse(file_name)
+            parsed_files.append((meta, data))
+            # we only care about the record group that has the desired
+            # exc_gens (F_mig)
+            for r_group in data:
+                if r_group.exc_gens == exc_gens:
+                    # average difference from optimal after max_gens generations
+                    total = 0
+                    for rec in r_group.records:
+                        total += rec.lengths[max_gens - 1]
+                    avg = total / r_group.record_count
+                    diff = percent_diff_from_optimal(avg, meta.optimal_length)
+                    diffs_all_core_counts.append(diff)
+        diffs_all_test_cases.append(diffs_all_core_counts)
+
+    plot_and_save(x_values=x_values,
+            y_values=diffs_all_test_cases,
+            labels=labels_all_test_cases,
+            title=title,
+            xlabel=xlabel,
+            ylabel=ylabel,
+            file_name=plot_file_name
+            )
 
 # Core count on X axis, difference from optimal on Y,
 # plots single test case, varies generations count.
