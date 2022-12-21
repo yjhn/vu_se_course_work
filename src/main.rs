@@ -72,6 +72,8 @@ fn main() {
         bench_repeat_times,
         algorithms,
         bench_results_dir,
+        population_size,
+        exchange_generations,
     } = arguments::Args::parse();
 
     let algorithms: Vec<Algorithm> = algorithms
@@ -85,6 +87,7 @@ fn main() {
         println!("Benchmark: {benchmark}");
         println!("Benchmark repeat times: {bench_repeat_times}");
         println!("Algorithms: {algorithms:?}");
+        println!("Population size: {population_size}");
     }
 
     if benchmark {
@@ -100,6 +103,12 @@ fn main() {
                 _ => panic!("Benchmark only works with att532, gr666, rat783 and pr1002"),
             };
 
+            let exc_gen = if exchange_generations.is_empty() {
+                &EXCHANGE_GENERATIONS
+            } else {
+                exchange_generations.as_slice()
+            };
+
             benchmark::benchmark::<&str, config::MainRng>(
                 &path,
                 problem_name,
@@ -110,8 +119,8 @@ fn main() {
                 rank,
                 is_root,
                 bench_repeat_times,
-                POPULATION_SIZE,
-                &EXCHANGE_GENERATIONS,
+                population_size,
+                exc_gen,
                 &algorithms,
                 &bench_results_dir,
             );
