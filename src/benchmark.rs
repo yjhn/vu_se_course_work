@@ -41,7 +41,7 @@ pub fn benchmark<PD, R>(
 
     for a in algorithms {
         let problem = TspProblem::from_file(&path);
-        let save_file_name = format!(
+        let save_file_path = format!(
             "{results_dir}/bm_{problem_name}_alg_{a}_{}_cpus.out",
             world.size()
         );
@@ -50,12 +50,14 @@ pub fn benchmark<PD, R>(
             let res_file = OpenOptions::new()
                 .write(true)
                 .create_new(true)
-                .open(save_file_name);
+                .open(&save_file_path);
 
             match res_file {
                 Ok(f) => f,
                 Err(_) => {
-                    println!("Will not overwrite existing benchmark results file");
+                    println!(
+                        "Will not overwrite existing benchmark results file:\n{save_file_path}"
+                    );
                     world.abort(1);
                 }
             }
