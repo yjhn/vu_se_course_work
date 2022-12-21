@@ -87,7 +87,9 @@ fn main() {
         println!("Benchmark: {benchmark}");
         println!("Benchmark repeat times: {bench_repeat_times}");
         println!("Algorithms: {algorithms:?}");
+        println!("Benchmark results directory: {bench_results_dir}");
         println!("Population size: {population_size}");
+        println!("Exchange generations: {exchange_generations:?}");
     }
 
     if benchmark {
