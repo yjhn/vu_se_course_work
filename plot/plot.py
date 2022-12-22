@@ -1,6 +1,6 @@
 import os
 import argparse
-from matplotlib import pyplot as plt
+import matplotlib as mpl
 import numpy as np
 
 # test case = tsp problem file
@@ -28,6 +28,17 @@ import numpy as np
 ## n record groups
 ## end record groups
 
+ALGOS = ["cga", "cga2opt", "cga3opt"]
+CORE_COUNTS = [1, 2, 4, 8]
+TEST_CASES = ["att532", "gr666", "rat783", "pr1002"]
+EXCHANGE_GENERATIONS = [4, 8, 16, 32]
+PLOT_KINDS = [
+    "gens_diff_excg",
+    "cores_diff_test_cases",
+    "cores_diff_gens",
+    "cores_diff_algos"
+    ]
+
 # Optimal problem (test case) lengths
 OPTIMAL_LENGTHS = {
     "att532": 27686,
@@ -53,6 +64,18 @@ PLOT_DPI = 220
 
 # controls where in the plot the legend is placed
 PLOT_LEGEND_LOCATION = "upper right"
+
+CORE_COUNT_AXIS_LABEL = "branduolių skaičius"
+DIFF_FROM_OPTIMAL_AXIS_LABEL = "skirtumas nuo optimalaus, %"
+
+PLOT_FORMAT = "pgf"
+# PLOT_FORMAT = "png"
+
+PLOT_SCALE = 1.0
+
+# Got it with '\showthe\textwidth' in Latex
+# (stops comilation and shows the number)
+DOCUMENT_WIDTH_PT = 469.47049
 
 class RecordMetaInfo:
     def __init__(self, meta_info_line):
@@ -102,7 +125,7 @@ def parse_int_list(text, separator=','):
     return ints
 
 # Parse file content.
-def parse(file_name):
+def parse_benchmark_results(file_name):
     with open(file_name, "r") as file:
         full_content = file.read()
     
@@ -143,60 +166,105 @@ def main():
                         required=False,
                         default="./")
     parser.add_argument("-a", "--algorithms",
-                        choices=["cga", "cga2opt", "cga3opt"],
+                        choices=ALGOS,
                         nargs="+",
                         required=False,
-                        default=["cga", "cga2opt", "cga3opt"])
+                        default=ALGOS)
     parser.add_argument("-c", "--core-counts",
                         type=int,
-                        choices=[1, 2, 4, 8],
+                        choices=CORE_COUNTS,
                         nargs="+",
                         required=False,
-                        default=[1, 2, 4, 8])
+                        default=CORE_COUNTS)
     parser.add_argument("-t", "--test-cases",
-                        choices=["att532", "gr666", "rat783", "pr1002"],
+                        choices=TEST_CASES,
                         nargs="+",
                         required=False,
-                        default=["att532", "gr666", "rat783", "pr1002"])
+                        default=TEST_CASES)
     # will average over the given exchange generations as they
     # do not make any meaningful difference
     parser.add_argument("-e", "--exchange-generations",
-                        choices=[4, 8, 16, 32],
+                        choices=EXCHANGE_GENERATIONS,
                         type=int,
                         nargs="+",
                         required=False,
-                        default=[4, 8, 16, 32])
+                        default=EXCHANGE_GENERATIONS)
     # show results after this many generations
     parser.add_argument("-g", "--generation-count",
                         type=int,
                         required=False,
                         default=500)
+    # what kind of plots to generate
+    parser.add_argument("-k", "--plot-kinds",
+                        choices=PLOT_KINDS,
+                        nargs="+",
+                        required=False,
+                        default=PLOT_KINDS)
+    global PLOT_FORMAT
+    parser.add_argument("-f", "--plot-format",
+                        choices=["pgf", "png"],
+                        required=False,
+                        default=PLOT_FORMAT)
+    global PLOT_SCALE
+    # for pgf only, means width proportion of textwidth
+    parser.add_argument("-s", "--plot-scale",
+                        type=float,
+                        required=False,
+                        default=PLOT_SCALE)
     args = parser.parse_args()
     directory = canonicalize_dir(args.directory)
     results_dir = canonicalize_dir(args.plot_directory)
     if not os.path.isdir(results_dir):
         os.mkdir(results_dir)
     
+    PLOT_FORMAT = args.plot_format
+    PLOT_SCALE = args.plot_scale
+    
     algos = list(map(lambda x: ALGO_TO_FILE_NAME_PART[x], args.algorithms))
     core_counts = args.core_counts
     test_cases = args.test_cases
     max_generations = args.generation_count
     exc_gens = args.exchange_generations
+    plot_kinds = args.plot_kinds
     
     for a in algos:
-        print("Processing algorithm: " + a)
         for e in exc_gens:
-            plot_cores_diff_from_opt_test_cases(
-                directory=directory,
-                core_counts=core_counts,
-                test_cases=test_cases,
-                algo=a,
-                exc_gens=e,
-                max_gens=max_generations,
-                results_dir=results_dir
-                )
+            if "cores_diff_test_cases" in plot_kinds:
+                plot_cores_diff_from_opt_test_cases(
+                    directory=directory,
+                    core_counts=core_counts,
+                    test_cases=test_cases,
+                    algo=a,
+                    exc_gens=e,
+                    max_gens=max_generations,
+                    results_dir=results_dir
+                    )
+            
+            for t in test_cases:
+                if "cores_diff_gens" in plot_kinds:
+                    plot_cores_diff_from_opt_generations(
+                        directory=directory,
+                        test_case=t,
+                        algo=a,
+                        core_counts=core_counts,
+                        exc_gens=e,
+                        max_gens=max_generations,
+                        results_dir=results_dir
+                        )
+                
+                if "cores_diff_algos" in plot_kinds:
+                    plot_cores_diff_from_opt_algos(
+                        directory=directory,
+                        test_case=t,
+                        algos=algos,
+                        core_counts=core_counts,
+                        exc_gens=e,
+                        max_gens=max_generations,
+                        results_dir=results_dir
+                        )
     
-    # plot_basic(directory, results_dir)
+    if "gens_diff_excg" in plot_kinds:
+        plot_basic(directory, results_dir)
 
 def canonicalize_dir(directory):
     if not directory.endswith("/"):
@@ -232,17 +300,31 @@ def one_exchange_gen_avg(record_group):
 # y_values = array of arrays
 # labels = array of labels, len(labels) == len(y_values)
 def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name):
+    if PLOT_FORMAT == "pgf":
+        # mpl.use() must be called before importing pyplot
+        mpl.use("pgf")
+        from matplotlib import pyplot as plt
+        plt.rcParams.update({
+            "font.family": "serif",  # use serif/main font for text elements
+            "text.usetex": True,     # use inline math for ticks
+            "pgf.rcfonts": False     # don't setup fonts from rc parameters
+        })
+        fig = plt.figure(figsize=set_size(fraction=PLOT_SCALE))
+    else:
+        from matplotlib import pyplot as plt
+    
     for (y, l) in zip(y_values, labels):
         plt.plot(x_values, y, label=l, marker='o', linestyle='dashed')
     plt.legend(loc=PLOT_LEGEND_LOCATION)
     plt.title(title)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
-    final_file_name = f"{file_name}.png"
+    final_file_name = f"{file_name}.{PLOT_FORMAT}"
     if os.path.exists(final_file_name):
         raise FileExistsError(f"Will not overwrite existing plot file:\n{final_file_name}")
     print(f"saving plot: {final_file_name}")
-    plt.savefig(final_file_name, format="png", dpi=PLOT_DPI)
+    # dpi is ignored when using pgf
+    plt.savefig(final_file_name, format=PLOT_FORMAT, dpi=PLOT_DPI)
     plt.clf()
 
 # dir must end with '/'
@@ -259,7 +341,7 @@ def plot_basic(directory, results_dir):
         file_name = directory + name
         print(f"Processing file '{file_name}'")
         
-        (meta_info, exchange_gens) = parse(file_name)
+        (meta_info, exchange_gens) = parse_benchmark_results(file_name)
         
         problem_name = meta_info.problem_name
         optimal_length = meta_info.optimal_length
@@ -274,7 +356,7 @@ def plot_basic(directory, results_dir):
             cpus_name = "branduoliai"
         title = f"{DIAGRAM_TITLES[algorithm]}, {cpu_count} {cpus_name}"
         xlabel = "genetinio algoritmo karta"
-        ylabel = "skirtumas nuo optimalaus kelio, %"
+        ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
         file_name = results_dir + plot_file_base_name
         for exc in exchange_gens:
             (meta_info, exc_gen_avg) = one_exchange_gen_avg(exc)
@@ -295,12 +377,20 @@ def plot_basic(directory, results_dir):
 
 # Core count on X axis, difference from optimal on Y,
 # different test cases in one plot.
-def plot_cores_diff_from_opt_test_cases(directory, core_counts, test_cases, algo, exc_gens, max_gens, results_dir):
+def plot_cores_diff_from_opt_test_cases(
+    directory,
+    core_counts,
+    test_cases,
+    algo,
+    exc_gens,
+    max_gens,
+    results_dir):
+    
     title = f"{algo} skirtumas nuo optimalaus po {max_gens} kartų, F_mig = {exc_gens}"
-    x_values = [1, 2, 4, 8]
-    xlabel = "branduolių skaičius"
-    ylabel = "skirtumas nuo optimalaus, %"
-    plot_file_name = f"cores_diff_from_opt_test_cases_mgen_{max_gens}_egen_{exc_gens}_{algo}"
+    x_values = core_counts
+    xlabel = CORE_COUNT_AXIS_LABEL
+    ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
+    plot_file_name = f"cores_diff_from_opt_test_cases_{algo}_mgen_{max_gens}_egen_{exc_gens}"
     parsed_files = []
     labels_all_test_cases = []
     diffs_all_test_cases = []
@@ -309,19 +399,20 @@ def plot_cores_diff_from_opt_test_cases(directory, core_counts, test_cases, algo
         diffs_all_core_counts = []
         for c in core_counts:
             file_name = make_file_name(directory, t, algo, c)
-            (meta, data) = parse(file_name)
+            (meta, data) = parse_benchmark_results(file_name)
             parsed_files.append((meta, data))
             # we only care about the record group that has the desired
             # exc_gens (F_mig)
-            for r_group in data:
-                if r_group.exc_gens == exc_gens:
-                    # average difference from optimal after max_gens generations
-                    total = 0
-                    for rec in r_group.records:
-                        total += rec.lengths[max_gens - 1]
-                    avg = total / r_group.record_count
-                    diff = percent_diff_from_optimal(avg, meta.optimal_length)
-                    diffs_all_core_counts.append(diff)
+            r_groups = [r for r in data if r.exc_gens == exc_gens]
+            assert(len(r_groups) == 1)
+            r_group = r_groups[0]
+            # average difference from optimal after max_gens generations
+            total = 0
+            for rec in r_group.records:
+                total += rec.lengths[max_gens - 1]
+            avg = total / r_group.record_count
+            diff = percent_diff_from_optimal(avg, meta.optimal_length)
+            diffs_all_core_counts.append(diff)
         diffs_all_test_cases.append(diffs_all_core_counts)
 
     plot_and_save(x_values=x_values,
@@ -335,13 +426,135 @@ def plot_cores_diff_from_opt_test_cases(directory, core_counts, test_cases, algo
 
 # Core count on X axis, difference from optimal on Y,
 # plots single test case, varies generations count.
-def plot_cores_diff_from_opt_generations(test_case, algo):
-    TODO
+# plots every 100 gens, up to and including max_gens
+def plot_cores_diff_from_opt_generations(
+    directory,
+    test_case,
+    algo,
+    core_counts,
+    exc_gens,
+    max_gens,
+    results_dir):
+    
+    title = f"{test_case}, {algo}, F_mig = {exc_gens}"
+    x_values = core_counts
+    xlabel = CORE_COUNT_AXIS_LABEL
+    ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
+    plot_file_name = f"cores_diff_from_opt_gens_{test_case}_{algo}_mgen_{max_gens}_egen_{exc_gens}"
+    parsed_files = []
+    labels_all_gens_counts = []
+    diffs_all_gens_counts = []
+    # TODO: include generation 0
+    for g in range(99, max_gens, 100):
+        labels_all_gens_counts.append(str(g + 1))
+        diffs_single_gens_count = []
+        for c in core_counts:
+            file_name = make_file_name(directory, test_case, algo, c)
+            (meta, data) = parse_benchmark_results(file_name)
+            parsed_files.append((meta, data))
+            # we only care about the record group that has the desired
+            # exc_gens (F_mig)
+            r_groups = [r for r in data if r.exc_gens == exc_gens]
+            assert(len(r_groups) == 1)
+            r_group = r_groups[0]
+            total = 0
+            for rec in r_group.records:
+                total += rec.lengths[g]
+            avg = total / r_group.record_count
+            diff = percent_diff_from_optimal(avg, meta.optimal_length)
+            diffs_single_gens_count.append(diff)
+        diffs_all_gens_counts.append(diffs_single_gens_count)
+    
+    plot_and_save(x_values=x_values,
+            y_values=diffs_all_gens_counts,
+            labels=labels_all_gens_counts,
+            title=title,
+            xlabel=xlabel,
+            ylabel=ylabel,
+            file_name=results_dir + plot_file_name
+            )
+
 
 # Core count on X axis, difference from optimal on Y,
-# plots multiple algorithms ans a single test case.
-def plot_cores_diff_from_opt_multi_alg(test_case, algos):
-    TODO
+# plots multiple algorithms and a single test case.
+def plot_cores_diff_from_opt_algos(
+    directory,
+    test_case,
+    algos,
+    core_counts,
+    exc_gens,
+    max_gens,
+    results_dir):
+    
+    title = f"{test_case}, {algos}, F_mig = {exc_gens}"
+    x_values = core_counts
+    xlabel = CORE_COUNT_AXIS_LABEL
+    ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
+    plot_file_name = f"cores_diff_from_opt_gens_{test_case}_multialgos_mgen_{max_gens}_egen_{exc_gens}"
+    parsed_files = []
+    labels_all_algos = []
+    diffs_all_algos = []
+    for a in algos:
+        labels_all_algos.append(a)
+        diffs_single_algo = []
+        for c in core_counts:
+            file_name = make_file_name(directory, test_case, a, c)
+            (meta, data) = parse_benchmark_results(file_name)
+            parsed_files.append((meta, data))
+            # we only care about the record group that has the desired
+            # exc_gens (F_mig)
+            r_groups = [r for r in data if r.exc_gens == exc_gens]
+            assert(len(r_groups) == 1)
+            r_group = r_groups[0]
+            total = 0
+            for rec in r_group.records:
+                total += rec.lengths[max_gens - 1]
+            avg = total / r_group.record_count
+            diff = percent_diff_from_optimal(avg, meta.optimal_length)
+            diffs_single_algo.append(diff)
+        diffs_all_algos.append(diffs_single_algo)
+    
+    plot_and_save(x_values=x_values,
+            y_values=diffs_all_algos,
+            labels=labels_all_algos,
+            title=title,
+            xlabel=xlabel,
+            ylabel=ylabel,
+            file_name=results_dir + plot_file_name
+            )
+
+
+# for pgf
+def set_size(fraction=1, subplots=(1, 1)):
+    """Set figure dimensions to sit nicely in our document.
+
+    Parameters
+    ----------
+    width_pt: float
+            Document width in points
+    fraction: float, optional
+            Fraction of the width which you wish the figure to occupy
+    subplots: array-like, optional
+            The number of rows and columns of subplots.
+    Returns
+    -------
+    fig_dim: tuple
+            Dimensions of figure in inches
+    """
+    # Width of figure (in pts)
+    fig_width_pt = DOCUMENT_WIDTH_PT * fraction
+    # Convert from pt to inches
+    inches_per_pt = 1 / 72.27
+
+    # Golden ratio to set aesthetic figure height
+    golden_ratio = (5**.5 - 1) / 2
+
+    # Figure width in inches
+    fig_width_in = fig_width_pt * inches_per_pt
+    # Figure height in inches
+    fig_height_in = fig_width_in * golden_ratio * (subplots[0] / subplots[1])
+
+    return (fig_width_in, fig_height_in)
 
 if __name__ == "__main__":
     main()
