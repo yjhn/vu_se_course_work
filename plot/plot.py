@@ -59,18 +59,19 @@ ALGO_TO_FILE_NAME_PART = {
     "cga3opt": "Cga + 3-opt"
 }
 
-# controls plot image resolution
-PLOT_DPI = 220
-
 # controls where in the plot the legend is placed
 PLOT_LEGEND_LOCATION = "upper right"
 
 CORE_COUNT_AXIS_LABEL = "branduolių skaičius"
 DIFF_FROM_OPTIMAL_AXIS_LABEL = "skirtumas nuo optimalaus, %"
 
+# controls plot image resolution (png)
+PLOT_DPI = 220
+
 PLOT_FORMAT = "pgf"
 # PLOT_FORMAT = "png"
 
+# pgf plot scale
 PLOT_SCALE = 1.0
 
 # Got it with '\showthe\textwidth' in Latex
@@ -299,7 +300,7 @@ def one_exchange_gen_avg(record_group):
 # x_values = array
 # y_values = array of arrays
 # labels = array of labels, len(labels) == len(y_values)
-def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name):
+def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name, style={"marker": "o", "linestyle": "dashed"}):
     if PLOT_FORMAT == "pgf":
         # mpl.use() must be called before importing pyplot
         mpl.use("pgf")
@@ -314,7 +315,7 @@ def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name):
         from matplotlib import pyplot as plt
     
     for (y, l) in zip(y_values, labels):
-        plt.plot(x_values, y, label=l, marker='o', linestyle='dashed')
+        plt.plot(x_values, y, label=l, **style)
     plt.legend(loc=PLOT_LEGEND_LOCATION)
     plt.title(title)
     plt.xlabel(xlabel)
@@ -339,13 +340,11 @@ def plot_basic(directory, results_dir):
     x_axis_values = np.arange(1, 501)
     for name in os.listdir(directory):
         file_name = directory + name
-        print(f"Processing file '{file_name}'")
+        (meta, data) = parse_benchmark_results(file_name)
         
-        (meta_info, exchange_gens) = parse_benchmark_results(file_name)
-        
-        problem_name = meta_info.problem_name
-        optimal_length = meta_info.optimal_length
-        algorithm = meta_info.algorithm
+        problem_name = meta.problem_name
+        optimal_length = meta.optimal_length
+        algorithm = meta.algorithm
         cpu_count = meta.cpu_count
         plot_file_base_name = file_name.split('.')[0].split('/')[-1]
         y_values = []
@@ -358,7 +357,7 @@ def plot_basic(directory, results_dir):
         xlabel = "genetinio algoritmo karta"
         ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
         file_name = results_dir + plot_file_base_name
-        for exc in exchange_gens:
+        for exc in data:
             (meta_info, exc_gen_avg) = one_exchange_gen_avg(exc)
             # Plot the percentage difference from the optimal tour.
             diff =  map(lambda x: (x - optimal_length) / optimal_length * 100.0, exc_gen_avg)
@@ -371,7 +370,8 @@ def plot_basic(directory, results_dir):
              title=title,
              xlabel=xlabel,
              ylabel=ylabel,
-             file_name=file_name
+             file_name=file_name,
+             style={}
              )
 
 
