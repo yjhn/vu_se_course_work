@@ -28,18 +28,18 @@ import numpy as np
 ## n record groups
 ## end record groups
 
-# Optimal problem lengths
-OPTIMAL_LENGTHS = {\
-    "att532": 27686,\
-    "gr666": 294358,\
-    "rat783": 8806,\
-    "pr1002": 259045\
+# Optimal problem (test case) lengths
+OPTIMAL_LENGTHS = {
+    "att532": 27686,
+    "gr666": 294358,
+    "rat783": 8806,
+    "pr1002": 259045
 }
 
 DIAGRAM_TITLES = {\
-    "Cga": "Cga algoritmo trumpiausias kelias",\
-    "Cga + 2-opt": "Cga 2-opt algoritmo trumpiausias kelias",\
-    "Cga + 3-opt": "Cga 3-opt algoritmo trumpiausias kelias"\
+    "Cga": "Cga algoritmo trumpiausias kelias",
+    "Cga + 2-opt": "Cga 2-opt algoritmo trumpiausias kelias",
+    "Cga + 3-opt": "Cga 3-opt algoritmo trumpiausias kelias"
 }
 
 ALGO_TO_FILE_NAME_PART = {
@@ -120,6 +120,7 @@ def separate_header(text):
     parts = text.split("\n\n\n\n\n\n")
     return (parts[0], parts[1])
 
+# Separates main content into record groups.
 def separate_by_exchange_gens(text):
     # In theory record group sepearator is "\n\n\n", but in practice
     # after last record in record group "\n\n" is written,
@@ -134,10 +135,13 @@ def separate_repeat_runs(text):
 
 
 def main():
-    parser = argparse.ArgumentParser(prog = "plot")
+    parser = argparse.ArgumentParser(prog="plot")
     # directory is where benchmark results files are stored
     # the program itself will decide which files it needs
     parser.add_argument("-d", "--directory", required=True)
+    parser.add_argument("-p", "--plot-directory",
+                        required=False,
+                        default="./")
     parser.add_argument("-a", "--algorithms",
                         choices=["cga", "cga2opt", "cga3opt"],
                         nargs="+",
@@ -168,25 +172,37 @@ def main():
                         required=False,
                         default=500)
     args = parser.parse_args()
-    directory = args.directory
-    if not directory.endswith("/"):
-        directory += "/"
+    directory = canonicalize_dir(args.directory)
+    results_dir = canonicalize_dir(args.plot_directory)
+    if not os.path.isdir(results_dir):
+        os.mkdir(results_dir)
+    
     algos = list(map(lambda x: ALGO_TO_FILE_NAME_PART[x], args.algorithms))
     core_counts = args.core_counts
     test_cases = args.test_cases
     max_generations = args.generation_count
     exc_gens = args.exchange_generations
-    # for t in test_cases:
-    #     for a in algos:
-    #         for c in core_counts:
-    #             print(make_file_name(directory, t, a, c))
     
     for a in algos:
         print("Processing algorithm: " + a)
         for e in exc_gens:
-            plot_cores_diff_from_opt_test_cases(directory, core_counts, test_cases, a, e, max_generations)
+            plot_cores_diff_from_opt_test_cases(
+                directory=directory,
+                core_counts=core_counts,
+                test_cases=test_cases,
+                algo=a,
+                exc_gens=e,
+                max_gens=max_generations,
+                results_dir=results_dir
+                )
     
-    # plot_basic(directory)
+    # plot_basic(directory, results_dir)
+
+def canonicalize_dir(directory):
+    if not directory.endswith("/"):
+        return directory + "/"
+    else:
+        return directory
 
 def percent_diff_from_optimal(x, optimal):
     diff = x - optimal
@@ -223,6 +239,8 @@ def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name):
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     final_file_name = f"{file_name}.png"
+    if os.path.exists(final_file_name):
+        raise FileExistsError(f"Will not overwrite existing plot file:\n{final_file_name}")
     print(f"saving plot: {final_file_name}")
     plt.savefig(final_file_name, format="png", dpi=PLOT_DPI)
     plt.clf()
@@ -231,7 +249,11 @@ def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name):
 def make_file_name(directory, test_case, algo, cpus):
     return f"{directory}bm_{test_case}_alg_{algo}_{cpus}_cpus.out"
 
-def plot_basic(directory):
+# Plots the difference from the optimal length.
+# x axis - generations
+# y axis - diff from optimal
+# in one plot: one test case, one thread count, all F_mig (exchange gens)
+def plot_basic(directory, results_dir):
     x_axis_values = np.arange(1, 501)
     for name in os.listdir(directory):
         file_name = directory + name
@@ -242,13 +264,18 @@ def plot_basic(directory):
         problem_name = meta_info.problem_name
         optimal_length = meta_info.optimal_length
         algorithm = meta_info.algorithm
+        cpu_count = meta.cpu_count
         plot_file_base_name = file_name.split('.')[0].split('/')[-1]
         y_values = []
         labels = []
-        title = DIAGRAM_TITLES[algorithm]
+        if cpu_count == 1:
+            cpus_name = "branduolys"
+        else:
+            cpus_name = "branduoliai"
+        title = f"{DIAGRAM_TITLES[algorithm]}, {cpu_count} {cpus_name}"
         xlabel = "genetinio algoritmo karta"
         ylabel = "skirtumas nuo optimalaus kelio, %"
-        file_name = plot_file_base_name
+        file_name = results_dir + plot_file_base_name
         for exc in exchange_gens:
             (meta_info, exc_gen_avg) = one_exchange_gen_avg(exc)
             # Plot the percentage difference from the optimal tour.
@@ -268,8 +295,7 @@ def plot_basic(directory):
 
 # Core count on X axis, difference from optimal on Y,
 # different test cases in one plot.
-def plot_cores_diff_from_opt_test_cases(directory, core_counts, test_cases, algo, exc_gens, max_gens):
-    # Find out which files we need.
+def plot_cores_diff_from_opt_test_cases(directory, core_counts, test_cases, algo, exc_gens, max_gens, results_dir):
     title = f"{algo} skirtumas nuo optimalaus po {max_gens} kartų, F_mig = {exc_gens}"
     x_values = [1, 2, 4, 8]
     xlabel = "branduolių skaičius"
@@ -304,7 +330,7 @@ def plot_cores_diff_from_opt_test_cases(directory, core_counts, test_cases, algo
             title=title,
             xlabel=xlabel,
             ylabel=ylabel,
-            file_name=plot_file_name
+            file_name=results_dir + plot_file_name
             )
 
 # Core count on X axis, difference from optimal on Y,
