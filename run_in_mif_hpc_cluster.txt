@@ -75,10 +75,5 @@ dpkg -x libgcc-s1_10.3.0-1ubuntu1~20.04_amd64.deb clang_stuff
 dpkg -x libllvm12_1%3a12.0.0-3ubuntu1~20.04.5_amd64.deb clang_stuff
 dpkg -x libclang1-12_1%3a12.0.0-3ubuntu1~20.04.5_amd64.deb clang_stuff
 
-3. Compile the project in release mode:
-
-cd <project dir>
-
-module load openmpi
-source "$HOME/.cargo/env"
-C_INCLUDE_PATH=/usr/lib/gcc/x86_64-linux-gnu/9/include"${C_INCLUDE_PATH+:}${C_INCLUDE_PATH-}" LIBCLANG_PATH="/scratch/lustre/home/<username>/clang_stuff/usr/lib/llvm-12/lib" cargo build --release
+# View squeue full job name
+sacct --format="JobID,JobName%30"
