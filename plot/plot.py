@@ -115,7 +115,7 @@ class FileMetaInfo:
         assert(len(header_lines) == 3)
         self.problem_name = header_lines[1].split(": ")[1]
         self.optimal_length = OPTIMAL_LENGTHS[self.problem_name]
-        self.cpu_count = header_lines[2].split(": ")[1]
+        self.cpu_count = int(header_lines[2].split(": ")[1])
         self.algorithm = file_name.split("alg_")[1].split("_")[0]
 
 def parse_int_list(text, separator=','):
@@ -346,7 +346,7 @@ def plot_basic(directory, results_dir):
         optimal_length = meta.optimal_length
         algorithm = meta.algorithm
         cpu_count = meta.cpu_count
-        plot_file_base_name = file_name.split('.')[0].split('/')[-1]
+        plot_file_base_name = file_name.split('/')[-1].split('.')[0]
         y_values = []
         labels = []
         if cpu_count == 1:
