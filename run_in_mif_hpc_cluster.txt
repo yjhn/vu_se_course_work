@@ -25,7 +25,7 @@ cd <project dir>
 
 module load openmpi
 source "$HOME/.cargo/env"
-C_INCLUDE_PATH=/usr/lib/gcc/x86_64-linux-gnu/9/include"${C_INCLUDE_PATH+:}${C_INCLUDE_PATH-}" LIBCLANG_PATH="/scratch/lustre/home/<username>/clang_stuff/usr/lib/llvm-12/lib" cargo build --release
+C_INCLUDE_PATH=/usr/lib/gcc/x86_64-linux-gnu/9/include"${C_INCLUDE_PATH+:}${C_INCLUDE_PATH-}" LIBCLANG_PATH="/scratch/lustre/home/<username>/clang_stuff/usr/lib/llvm-12/lib" RUSTFLAGS="-C target-cpu=native" cargo build --release
 
 4. Run the program
 
