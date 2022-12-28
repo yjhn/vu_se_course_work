@@ -118,8 +118,8 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                             // opt_tour.two_opt_take_best_each_time(problem.distances())
                             // opt_tour.two_opt_dlb_take_best_each_time(problem.distances())
                         }
-                        // Algorithm::CgaThreeOpt => opt_tour.three_opt_dlb(problem.distances()),
-                        Algorithm::CgaThreeOpt => opt_tour.three_opt(problem.distances()),
+                        Algorithm::CgaThreeOpt => opt_tour.three_opt_dlb(problem.distances()),
+                        // Algorithm::CgaThreeOpt => opt_tour.three_opt(problem.distances()),
                         Algorithm::Cga => unreachable!(),
                     }
 
@@ -315,8 +315,8 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
             // Algorithm::CgaTwoOpt => winner.two_opt_dlb(self.distances()),
             // Algorithm::CgaTwoOpt => winner.two_opt_take_best_each_time(self.distances()),
             // Algorithm::CgaTwoOpt => winner.two_opt_dlb_take_best_each_time(self.distances()),
-            Algorithm::CgaThreeOpt => winner.three_opt(self.distances()),
-            // Algorithm::CgaThreeOpt => winner.three_opt_dlb(self.distances()),
+            // Algorithm::CgaThreeOpt => winner.three_opt(self.distances()),
+            Algorithm::CgaThreeOpt => winner.three_opt_dlb(self.distances()),
             Algorithm::Cga => unreachable!(),
         }
         let tour_optimization = optimization_timer.elapsed();
