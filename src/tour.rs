@@ -1,6 +1,5 @@
 use std::fmt::Display;
 use std::io::Write;
-use std::time::Instant;
 use std::{fs::File, io::BufWriter, path::Path, slice::Windows};
 
 use rand::seq::SliceRandom;
@@ -296,6 +295,89 @@ impl Tour {
         }
     }
 
+    // Make 2-opt moves until no improvements can be made.
+    // Choose the move that gives the biggest benefit.
+    pub fn two_opt_dlb_take_best_each_time(&mut self, distances: &SquareMatrix<u32>) {
+        #[derive(Debug, Clone, Copy)]
+        struct TwoOptMove {
+            i: TourIndex,
+            j: TourIndex,
+            cities: [CityIndex; 4],
+        }
+
+        let mut best_move: Option<TwoOptMove> = None;
+        let mut best_move_gain = 0;
+
+        let len = self.cities.len();
+        let mut locally_optimal = false;
+
+        while !locally_optimal {
+            locally_optimal = true;
+            for city1_pos in 0..len {
+                let first_city = self.cities[city1_pos];
+                // If the DLB bit is set for the current city, we won't
+                // find any unique improving moves from this city
+                // Improving moves involving it may still be found from
+                // other cities.
+                if self.is_dlb_set(first_city) {
+                    continue;
+                }
+
+                // We need to go in both forward and backward directions.
+                // Alternative: set DLB to off if the segment with the city is reversed.
+
+                // We either start from the first chosen city or its predecessor.
+                // Reason: segment containing both first_city and its neighbour
+                // could have been reversed and if we don't consider first_city's
+                // predecessor (which could have been its successor previously),
+                // we could miss some moves by ignoring first_city if it has DLB set.
+                // 0 = forward, 1 = backward.
+                for start_city_pos in [city1_pos, (city1_pos + len - 1) % len] {
+                    let (x1, x2) = self.get_subsequent_pair(TourIndex::new(start_city_pos));
+
+                    for city2_pos in 0..len {
+                        let (y1, y2) = self.get_subsequent_pair(TourIndex::new(city2_pos));
+
+                        // Since we are iterating over the same array as the
+                        // loop above, we will get the same elements in one iteration and only one element ahead in another.
+                        if x1 == y1 || x2 == y1 || y2 == x1 {
+                            continue;
+                        }
+
+                        let expected_gain = Self::gain_from_2_opt(x1, x2, y1, y2, distances);
+
+                        if expected_gain > best_move_gain {
+                            best_move_gain = expected_gain;
+                            best_move = Some(TwoOptMove {
+                                i: TourIndex::new(start_city_pos),
+                                j: TourIndex::new(city2_pos),
+                                cities: [x1, x2, y1, y2],
+                            });
+                        }
+                    }
+                }
+
+                // If we reach here, we didn't find a valid move,
+                // so set the DLB for the city searched.
+                // This is incorrect. We must not set this if the move has been found.
+                self.set_dlb(first_city);
+            }
+
+            // If there is any move that shortens the tour, make it.
+            if let Some(move2) = best_move {
+                // Clear DLB for the cities involved.
+                self.clear_dlb(move2.cities[0]);
+                self.clear_dlb(move2.cities[1]);
+                self.clear_dlb(move2.cities[2]);
+                self.clear_dlb(move2.cities[3]);
+
+                self.make_2_opt_move(move2.i, move2.j, best_move_gain as u32);
+
+                locally_optimal = false;
+            }
+        }
+    }
+
     // Is DLB set for this city?
     fn is_dlb_set(&self, city: CityIndex) -> bool {
         self.dont_look_bits[city.get()]
@@ -585,6 +667,46 @@ impl Tour {
         }
     }
 
+    pub fn three_opt_original(&mut self, distances: &SquareMatrix<u32>) {
+        let len = self.number_of_cities();
+        let c = &self.cities[..];
+
+        'i_for: for _ in 0..len {
+            for k in 0..(len - 3) {
+                for j in (k + 1)..(len - 1) {
+                    let dist_reverse = distances[(c[k].get(), c[j + 1].get())]
+                        + distances[(c[0].get(), c[j].get())];
+                    let dist_no_reverse = distances[(c[0].get(), c[j + 1].get())]
+                        + distances[(c[k].get(), c[j].get())];
+                    let reverse;
+                    let d;
+
+                    if dist_reverse <= dist_no_reverse {
+                        d = dist_reverse;
+                        reverse = true;
+                    } else {
+                        d = dist_no_reverse;
+                        reverse = false;
+                    }
+
+                    if d + distances[(c[k + 1].get(), c[len - 1].get())]
+                        < distances[(c[0].get(), c[len - 1].get())]
+                            + distances[(c[k].get(), c[k + 1].get())]
+                            + distances[(c[j].get(), c[j + 1].get())]
+                    {
+                        if reverse {
+                            todo!()
+                        } else {
+                            todo!()
+                        }
+
+                        continue 'i_for;
+                    }
+                }
+            }
+        }
+    }
+
     pub fn three_opt_dlb(&mut self, distances: &SquareMatrix<u32>) {
         let mut locally_optimal = false;
         let len = self.number_of_cities();
@@ -723,6 +845,57 @@ impl Tour {
         } else {
             // b == a
             false
+        }
+    }
+
+    pub fn nearest_neighbour(
+        city_count: usize,
+        starting_city: Option<usize>,
+        distances: &SquareMatrix<u32>,
+        rng: &mut impl Rng,
+    ) -> Tour {
+        let starting_city = if let Some(c) = starting_city {
+            c
+        } else {
+            rng.gen_range(0..city_count)
+        };
+
+        let mut cities = Vec::with_capacity(city_count);
+
+        // Still unused cities.
+        let mut unused_cities: Vec<usize> = (0..city_count).collect();
+        unused_cities.swap_remove(starting_city);
+
+        let mut tour_length = 0;
+        let mut last_added_city = starting_city;
+
+        while !unused_cities.is_empty() {
+            let mut min_distance = u32::MAX;
+            let mut min_distance_city = unused_cities[0];
+            let mut min_distance_city_idx = 0;
+            for i in 0..unused_cities.len() {
+                let c = unused_cities[i];
+                let dist = distances[(last_added_city, c)];
+                if dist < min_distance {
+                    min_distance = dist;
+                    min_distance_city = c;
+                    min_distance_city_idx = i;
+                }
+            }
+
+            // Insert.
+            cities.push(CityIndex::new(min_distance_city));
+            last_added_city = min_distance_city;
+            tour_length += min_distance;
+            unused_cities.swap_remove(min_distance_city_idx);
+        }
+
+        tour_length += distances[(last_added_city, starting_city)];
+
+        Tour {
+            cities,
+            dont_look_bits: vec![false; city_count],
+            tour_length,
         }
     }
 }

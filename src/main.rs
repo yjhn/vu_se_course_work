@@ -53,7 +53,7 @@ mod config {
 }
 
 // Build and run locally on a single thread:
-// cargo build --release && RUST_BACKTRACE=1 mpirun -c 1 --use-hwthread-cpus --mca opal_warn_on_missing_libcuda 0 target/release/salesman -f data/att532.tsp -b 5 -a CgaTwoOpt --benchmark
+// RUSTFLAGS="-C target-cpu=native" cargo build --release && RUST_BACKTRACE=1 mpirun -c 1 --use-hwthread-cpus --mca opal_warn_on_missing_libcuda 0 target/release/salesman -f data/att532.tsp -b 5 -a CgaTwoOpt --benchmark
 
 fn main() {
     // Initialize stuff.
