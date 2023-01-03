@@ -241,8 +241,8 @@ def main():
                     results_dir=results_dir
                     )
             
-            for t in test_cases:
-                if "cores_diff_gens" in plot_kinds:
+            if "cores_diff_gens" in plot_kinds:
+                for t in test_cases:
                     plot_cores_diff_from_opt_generations(
                         directory=directory,
                         test_case=t,
@@ -252,17 +252,19 @@ def main():
                         max_gens=max_generations,
                         results_dir=results_dir
                         )
-                
-                if "cores_diff_algos" in plot_kinds:
-                    plot_cores_diff_from_opt_algos(
-                        directory=directory,
-                        test_case=t,
-                        algos=algos,
-                        core_counts=core_counts,
-                        exc_gens=e,
-                        max_gens=max_generations,
-                        results_dir=results_dir
-                        )
+    
+    if "cores_diff_algos" in plot_kinds:
+        for e in exc_gens:
+            for t in test_cases:
+                plot_cores_diff_from_opt_algos(
+                    directory=directory,
+                    test_case=t,
+                    algos=algos,
+                    core_counts=core_counts,
+                    exc_gens=e,
+                    max_gens=max_generations,
+                    results_dir=results_dir
+                    )
     
     if "gens_diff_excg" in plot_kinds:
         plot_basic(directory, results_dir)
@@ -327,6 +329,7 @@ def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name, 
     # dpi is ignored when using pgf
     plt.savefig(final_file_name, format=PLOT_FORMAT, dpi=PLOT_DPI)
     plt.clf()
+    plt.close()
 
 # dir must end with '/'
 def make_file_name(directory, test_case, algo, cpus):
