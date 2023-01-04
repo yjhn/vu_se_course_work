@@ -3,6 +3,9 @@ import argparse
 import matplotlib as mpl
 import numpy as np
 
+# Run:
+# python plot.py -d ../all_bench_results -t att532 gr666 rat783 pr1002 -p pgf -f pgf
+
 # test case = tsp problem file
 
 ## Results file format:
@@ -63,7 +66,7 @@ ALGO_TO_FILE_NAME_PART = {
 PLOT_LEGEND_LOCATION = "upper right"
 
 CORE_COUNT_AXIS_LABEL = "branduolių skaičius"
-DIFF_FROM_OPTIMAL_AXIS_LABEL = "skirtumas nuo optimalaus, %"
+DIFF_FROM_OPTIMAL_AXIS_LABEL = "skirtumas nuo optimalaus, $\%$"
 
 # controls plot image resolution (png)
 PLOT_DPI = 220
@@ -73,6 +76,9 @@ PLOT_FORMAT = "pgf"
 
 # pgf plot scale
 PLOT_SCALE = 1.0
+
+# height / width
+PLOT_ASPECT_RATIO = 0.8
 
 # Got it with '\showthe\textwidth' in Latex
 # (stops comilation and shows the number)
@@ -310,7 +316,13 @@ def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name, 
         plt.rcParams.update({
             "font.family": "serif",  # use serif/main font for text elements
             "text.usetex": True,     # use inline math for ticks
-            "pgf.rcfonts": False     # don't setup fonts from rc parameters
+            "pgf.rcfonts": False,    # don't setup fonts from rc parameters
+            "font.size": 8,
+            "axes.titlesize": 8,
+            "axes.labelsize": 8,
+            "xtick.labelsize": 8,
+            "ytick.labelsize": 8,
+            "legend.fontsize": 8
         })
         fig = plt.figure(figsize=set_size(fraction=PLOT_SCALE))
     else:
@@ -320,12 +332,14 @@ def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name, 
         plt.plot(x_values, y, label=l, **style)
     plt.legend(loc=PLOT_LEGEND_LOCATION)
     plt.title(title)
+    # plt.axes().set_aspect("equal")
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     final_file_name = f"{file_name}.{PLOT_FORMAT}"
     if os.path.exists(final_file_name):
         raise FileExistsError(f"Will not overwrite existing plot file:\n{final_file_name}")
     print(f"saving plot: {final_file_name}")
+    plt.tight_layout(pad=0.0)
     # dpi is ignored when using pgf
     plt.savefig(final_file_name, format=PLOT_FORMAT, dpi=PLOT_DPI)
     plt.clf()
@@ -365,7 +379,7 @@ def plot_basic(directory, results_dir):
             # Plot the percentage difference from the optimal tour.
             diff =  map(lambda x: (x - optimal_length) / optimal_length * 100.0, exc_gen_avg)
             y_values.append(list(diff))
-            labels.append(f"{problem_name}, F_mig = {exc.exc_gens}")
+            labels.append(f"{problem_name}, $O_{{mig}} = {exc.exc_gens}$")
 
         plot_and_save(x_values=x_axis_values,
              y_values=y_values,
@@ -439,7 +453,7 @@ def plot_cores_diff_from_opt_generations(
     max_gens,
     results_dir):
     
-    title = f"{test_case}, {algo}, F_mig = {exc_gens}"
+    title = f"{test_case}, {algo}, $O_{{mig}} = {exc_gens}$"
     x_values = core_counts
     xlabel = CORE_COUNT_AXIS_LABEL
     ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
@@ -489,7 +503,7 @@ def plot_cores_diff_from_opt_algos(
     max_gens,
     results_dir):
     
-    title = f"{test_case}, {algos}, F_mig = {exc_gens}"
+    title = f"{test_case}, {algos}, $O_{{mig}} = {exc_gens}$"
     x_values = core_counts
     xlabel = CORE_COUNT_AXIS_LABEL
     ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
@@ -555,7 +569,7 @@ def set_size(fraction=1, subplots=(1, 1)):
     # Figure width in inches
     fig_width_in = fig_width_pt * inches_per_pt
     # Figure height in inches
-    fig_height_in = fig_width_in * golden_ratio * (subplots[0] / subplots[1])
+    fig_height_in = fig_width_in * PLOT_ASPECT_RATIO * (subplots[0] / subplots[1])
 
     return (fig_width_in, fig_height_in)
 
