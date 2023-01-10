@@ -40,7 +40,14 @@ PLOT_KINDS = [
     "cores_diff_test_cases",
     "cores_diff_gens",
     "cores_diff_algos"
-    ]
+]
+ADD_TITLE = [
+    "none", # don't add titles anywhere
+    "gens_diff_excg",
+    "cores_diff_test_cases",
+    "cores_diff_gens",
+    "cores_diff_algos"
+]
 
 # Optimal problem (test case) lengths
 OPTIMAL_LENGTHS = {
@@ -52,8 +59,8 @@ OPTIMAL_LENGTHS = {
 
 DIAGRAM_TITLES = {\
     "Cga": "Cga algoritmo trumpiausias kelias",
-    "Cga + 2-opt": "Cga 2-opt algoritmo trumpiausias kelias",
-    "Cga + 3-opt": "Cga 3-opt algoritmo trumpiausias kelias"
+    "Cga + 2-opt": "LKGA + 2-opt algoritmas",
+    "Cga + 3-opt": "LKGA + 3-opt algoritmas"
 }
 
 ALGO_TO_FILE_NAME_PART = {
@@ -218,6 +225,12 @@ def main():
                         type=float,
                         required=False,
                         default=PLOT_SCALE)
+    # Whether to add diagram title to the specified plot kind.
+    # Currently only affects gens_diff_excg.
+    parser.add_argument("--add-titles",
+                        choices=ADD_TITLE,
+                        required=False,
+                        default=ADD_TITLE[1:])
     args = parser.parse_args()
     directory = canonicalize_dir(args.directory)
     results_dir = canonicalize_dir(args.plot_directory)
@@ -233,6 +246,11 @@ def main():
     max_generations = args.generation_count
     exc_gens = args.exchange_generations
     plot_kinds = args.plot_kinds
+    add_titles = args.add_titles
+    add_title_0 = PLOT_KINDS[0] in add_titles
+    add_title_1 = PLOT_KINDS[1] in add_titles
+    add_title_2 = PLOT_KINDS[2] in add_titles
+    add_title_3 = PLOT_KINDS[3] in add_titles
     
     for a in algos:
         for e in exc_gens:
@@ -273,7 +291,13 @@ def main():
                     )
     
     if "gens_diff_excg" in plot_kinds:
-        plot_basic(directory, results_dir)
+        plot_basic(
+            directory=directory,
+            results_dir=results_dir,
+            algos=algos,
+            test_cases=test_cases,
+            core_counts=core_counts,
+            add_title=add_title_0)
 
 def canonicalize_dir(directory):
     if not directory.endswith("/"):
@@ -322,7 +346,11 @@ def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name, 
             "axes.labelsize": 8,
             "xtick.labelsize": 8,
             "ytick.labelsize": 8,
-            "legend.fontsize": 8
+            "legend.fontsize": 8,
+            "legend.handlelength": 1.5,
+            "legend.frameon": False,
+            "legend.shadow": False,
+            "legend.borderaxespad": 0.1,
         })
         fig = plt.figure(figsize=set_size(fraction=PLOT_SCALE))
     else:
@@ -353,43 +381,58 @@ def make_file_name(directory, test_case, algo, cpus):
 # x axis - generations
 # y axis - diff from optimal
 # in one plot: one test case, one thread count, all F_mig (exchange gens)
-def plot_basic(directory, results_dir):
+def plot_basic(
+    directory,
+    results_dir,
+    algos,
+    test_cases,
+    core_counts,
+    add_title):
+    
     x_axis_values = np.arange(1, 501)
-    for name in os.listdir(directory):
-        file_name = directory + name
-        (meta, data) = parse_benchmark_results(file_name)
-        
-        problem_name = meta.problem_name
-        optimal_length = meta.optimal_length
-        algorithm = meta.algorithm
-        cpu_count = meta.cpu_count
-        plot_file_base_name = file_name.split('/')[-1].split('.')[0]
-        y_values = []
-        labels = []
-        if cpu_count == 1:
-            cpus_name = "branduolys"
-        else:
-            cpus_name = "branduoliai"
-        title = f"{DIAGRAM_TITLES[algorithm]}, {cpu_count} {cpus_name}"
-        xlabel = "genetinio algoritmo karta"
-        ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
-        file_name = results_dir + plot_file_base_name
-        for exc in data:
-            (meta_info, exc_gen_avg) = one_exchange_gen_avg(exc)
-            # Plot the percentage difference from the optimal tour.
-            diff =  map(lambda x: (x - optimal_length) / optimal_length * 100.0, exc_gen_avg)
-            y_values.append(list(diff))
-            labels.append(f"{problem_name}, $O_{{mig}} = {exc.exc_gens}$")
+    
+    for a in algos:
+        for t in test_cases:
+            for c in core_counts:
+                file_name = make_file_name(directory, t, a, c)
+    # for name in os.listdir(directory):
+                # file_name = directory + name
+                (meta, data) = parse_benchmark_results(file_name)
+                
+                problem_name = meta.problem_name
+                optimal_length = meta.optimal_length
+                algorithm = meta.algorithm
+                cpu_count = meta.cpu_count
+                plot_file_base_name = file_name.split('/')[-1].split('.')[0]
+                y_values = []
+                labels = []
+                if cpu_count == 1:
+                    cpus_name = "branduolys"
+                else:
+                    cpus_name = "branduoliai"
+                if add_title:
+                    title = f"{DIAGRAM_TITLES[algorithm]}, \\texttt{{{problem_name}}}, {cpu_count} {cpus_name}"
+                else:
+                    title = ""
+                xlabel = "genetinio algoritmo karta"
+                ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
+                file_name = results_dir + plot_file_base_name
+                for exc in data:
+                    (meta_info, exc_gen_avg) = one_exchange_gen_avg(exc)
+                    # Plot the percentage difference from the optimal tour.
+                    diff =  map(lambda x: (x - optimal_length) / optimal_length * 100.0, exc_gen_avg)
+                    y_values.append(list(diff))
+                    labels.append(f"$D_m={exc.exc_gens}$")
 
-        plot_and_save(x_values=x_axis_values,
-             y_values=y_values,
-             labels=labels,
-             title=title,
-             xlabel=xlabel,
-             ylabel=ylabel,
-             file_name=file_name,
-             style={}
-             )
+                plot_and_save(x_values=x_axis_values,
+                    y_values=y_values,
+                    labels=labels,
+                    title=title,
+                    xlabel=xlabel,
+                    ylabel=ylabel,
+                    file_name=file_name,
+                    style={}
+                    )
 
 
 # Core count on X axis, difference from optimal on Y,
@@ -403,7 +446,7 @@ def plot_cores_diff_from_opt_test_cases(
     max_gens,
     results_dir):
     
-    title = f"{algo} skirtumas nuo optimalaus po {max_gens} kartų, F_mig = {exc_gens}"
+    title = f"{algo} skirtumas nuo optimalaus po ${max_gens}$ kartų, $D_m={exc_gens}$"
     x_values = core_counts
     xlabel = CORE_COUNT_AXIS_LABEL
     ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
@@ -412,7 +455,7 @@ def plot_cores_diff_from_opt_test_cases(
     labels_all_test_cases = []
     diffs_all_test_cases = []
     for t in test_cases:
-        labels_all_test_cases.append(t)
+        labels_all_test_cases.append(f"\texttt{{{t}}}")
         diffs_all_core_counts = []
         for c in core_counts:
             file_name = make_file_name(directory, t, algo, c)
@@ -453,7 +496,7 @@ def plot_cores_diff_from_opt_generations(
     max_gens,
     results_dir):
     
-    title = f"{test_case}, {algo}, $O_{{mig}} = {exc_gens}$"
+    title = f"\texttt{{{test_case}}}, {algo}, $D_m={exc_gens}$"
     x_values = core_counts
     xlabel = CORE_COUNT_AXIS_LABEL
     ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
@@ -503,7 +546,7 @@ def plot_cores_diff_from_opt_algos(
     max_gens,
     results_dir):
     
-    title = f"{test_case}, {algos}, $O_{{mig}} = {exc_gens}$"
+    title = f"\texttt{{{test_case}}}, $D_m = {exc_gens}$"
     x_values = core_counts
     xlabel = CORE_COUNT_AXIS_LABEL
     ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
