@@ -667,46 +667,6 @@ impl Tour {
         }
     }
 
-    pub fn three_opt_original(&mut self, distances: &SquareMatrix<u32>) {
-        let len = self.number_of_cities();
-        let c = &self.cities[..];
-
-        'i_for: for _ in 0..len {
-            for k in 0..(len - 3) {
-                for j in (k + 1)..(len - 1) {
-                    let dist_reverse = distances[(c[k].get(), c[j + 1].get())]
-                        + distances[(c[0].get(), c[j].get())];
-                    let dist_no_reverse = distances[(c[0].get(), c[j + 1].get())]
-                        + distances[(c[k].get(), c[j].get())];
-                    let reverse;
-                    let d;
-
-                    if dist_reverse <= dist_no_reverse {
-                        d = dist_reverse;
-                        reverse = true;
-                    } else {
-                        d = dist_no_reverse;
-                        reverse = false;
-                    }
-
-                    if d + distances[(c[k + 1].get(), c[len - 1].get())]
-                        < distances[(c[0].get(), c[len - 1].get())]
-                            + distances[(c[k].get(), c[k + 1].get())]
-                            + distances[(c[j].get(), c[j + 1].get())]
-                    {
-                        if reverse {
-                            todo!()
-                        } else {
-                            todo!()
-                        }
-
-                        continue 'i_for;
-                    }
-                }
-            }
-        }
-    }
-
     pub fn three_opt_dlb(&mut self, distances: &SquareMatrix<u32>) {
         let mut locally_optimal = false;
         let len = self.number_of_cities();

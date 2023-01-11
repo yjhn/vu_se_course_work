@@ -203,7 +203,7 @@ fn run<PD, R>(
     );
 
     // This must be executed by all processes.
-    let best_global = solver.best_global_tour();
+    let (best_global, _avg_exchange_duration) = solver.best_global_tour();
 
     // Root process outputs the results.
     if is_root {
@@ -223,9 +223,9 @@ pub enum Algorithm {
 impl Display for Algorithm {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Algorithm::Cga => write!(f, "Cga"),
-            Algorithm::CgaTwoOpt => write!(f, "Cga + 2-opt"),
-            Algorithm::CgaThreeOpt => write!(f, "Cga + 3-opt"),
+            Algorithm::Cga => f.write_str("cga"),
+            Algorithm::CgaTwoOpt => f.write_str("cga2opt"),
+            Algorithm::CgaThreeOpt => f.write_str("cga3opt"),
         }
     }
 }

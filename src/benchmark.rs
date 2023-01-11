@@ -37,12 +37,13 @@ pub fn benchmark<PD, R>(
         println!("Problem file name: {path}");
         println!("MPI processes: {}", world.size());
         println!("Problem name: {problem_name}");
+        println!("Population size: {population_size}");
     }
 
     for a in algorithms {
         let problem = TspProblem::from_file(&path);
         let save_file_path = format!(
-            "{results_dir}/bm_{problem_name}_alg_{a}_{}_cpus.out",
+            "{results_dir}/bm_{problem_name}_{a}_{}_cpus_p{population_size}.out",
             world.size()
         );
 
@@ -73,13 +74,14 @@ pub fn benchmark<PD, R>(
         if is_root {
             writeln!(file, "Problem file name: {path}").unwrap();
             writeln!(file, "Problem name: {problem_name}").unwrap();
-            writeln!(file, "MPI processes: {}\n\n\n\n\n", world.size()).unwrap();
+            writeln!(file, "MPI processes: {}", world.size()).unwrap();
+            writeln!(file, "Population size: {population_size}\n\n\n\n\n").unwrap();
         }
 
         // \n\n = record separator
         // \n\n\n = exchange generations separator
         // \n\n\n\n = algorithm separator
-        // \n\n\n\n\n = file header separator
+        // \n\n\n\n\n\n = file header separator
         if is_root {
             println!("Algorithm used: {a:?}");
         }
@@ -99,7 +101,7 @@ pub fn benchmark<PD, R>(
                 );
 
                 // Evolve until optimal solution is found, but no longer than max_generations (to terminate at some point).
-                let (best_global_len, found_optimal, generations_info) =
+                let (best_global_len, found_optimal, generations_info, avg_tour_exchange_duration) =
                     solver.evolve_until_optimal(solution_length, max_generations);
 
                 if is_root {
@@ -119,10 +121,11 @@ pub fn benchmark<PD, R>(
                     // tour optimization time
                     write!(
                         file,
-                        "{a},{exc},{i},{},{},{}\n",
+                        "{a},{exc},{i},{},{},{},{}\n",
                         solver.current_generation(),
                         found_optimal,
-                        best_global_len
+                        best_global_len,
+                        avg_tour_exchange_duration.as_micros()
                     )
                     .unwrap();
                     // Generations info.

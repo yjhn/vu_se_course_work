@@ -188,16 +188,19 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         timings
     }
 
-    // Returns best global tour length, whether the best global
-    // tour is optimal, and vec of best tour length for each
-    // generation and generation timings.
+    // Returns:
+    // best global tour length,
+    // whether the best global tour is optimal,
+    // vec of best tour length for each generation and generation timings,
+    // average tour exchange duration
     pub fn evolve_until_optimal(
         &mut self,
         optimal_length: u32,
         max_generations: u32,
-    ) -> (u32, bool, GenerationsInfo) {
+    ) -> (u32, bool, GenerationsInfo, Duration) {
         let mut lengths_timings = GenerationsInfo::new(max_generations as usize);
         let mut best_global_len = 0;
+        let mut total_exchanges_duration = Duration::ZERO;
 
         while self.best_tour_length() > optimal_length && self.current_generation < max_generations
         {
@@ -207,49 +210,71 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                 Algorithm::CgaTwoOpt | Algorithm::CgaThreeOpt => self.evolve_inner_opt(),
             };
 
-            let best_global = if self.current_generation % self.exchange_generations == 0 {
-                self.exchange_best_tours()
-            } else {
-                // We are not exchanging tours this generation, but still
-                // collect best global tour length for statistics.
-                self.best_global_tour()
-            };
+            if self.current_generation % self.exchange_generations == 0 {
+                let (best_global, exchange_duration) = self.exchange_best_tours();
 
-            best_global_len = best_global.length();
-            lengths_timings.add_generation(
-                timing.tour_generation_from_prob_matrix(),
-                timing.tour_optimization(),
-                best_global_len,
-            );
-            // println!("Finished generation {}", self.current_generation);
+                total_exchanges_duration += exchange_duration;
 
-            if best_global_len == optimal_length {
-                return (best_global_len, true, lengths_timings);
-            } else if best_global_len < optimal_length {
-                // Sanity check.
-                if self.mpi.rank() == 0 {
-                    println!(
+                best_global_len = best_global.length();
+                // Add exchange_generations number of records, because
+                // plotting expects max_generations == lengths_timings.len().
+                // There is no point in exchanging every generation, since
+                // best_global improvements are rare.
+                for _ in 0..self.exchange_generations {
+                    lengths_timings.add_generation(
+                        timing.tour_generation_from_prob_matrix(),
+                        timing.tour_optimization(),
+                        best_global_len,
+                    );
+                }
+                // println!("Finished generation {}", self.current_generation);
+
+                if best_global_len == optimal_length {
+                    let number_of_exchanges = self.current_generation / self.exchange_generations;
+                    let avg_exchange_duration = total_exchanges_duration / number_of_exchanges;
+                    return (
+                        best_global_len,
+                        true,
+                        lengths_timings,
+                        avg_exchange_duration,
+                    );
+                } else if best_global_len < optimal_length {
+                    // Sanity check.
+                    if self.mpi.rank() == 0 {
+                        println!(
                         "Found tour shorter than best possible. Best possible length: {optimal_length}, found length: {best_global_len}, tour cities:\n{:?}",
                         best_global.cities()
                     );
 
-                    self.mpi.abort(2);
+                        self.mpi.abort(2);
+                    }
                 }
             }
         }
 
+        // Fill up the info to have exactly 500 records.
+        lengths_timings.extend_duplicate(max_generations as usize);
+
+        let number_of_exchanges = self.current_generation / self.exchange_generations;
+        let avg_exchange_duration = total_exchanges_duration / number_of_exchanges;
+
         // If this place is reached all the generations have passed,
         // their info is already in the vec and optimal tour has not been found.
-        (best_global_len, false, lengths_timings)
+        (
+            best_global_len,
+            false,
+            lengths_timings,
+            avg_exchange_duration,
+        )
     }
 
     pub fn problem_name(&self) -> &str {
         self.problem.name()
     }
 
-    // Returns the best global tour.
-    fn exchange_best_tours(&mut self) -> Tour {
-        let global_best = self.best_global_tour();
+    // Returns the best global tour and the time it took to exchange tours.
+    fn exchange_best_tours(&mut self) -> (Tour, Duration) {
+        let (global_best, exchange_duration) = self.best_global_tour();
 
         // Update the probability matrix if the global best tour is
         // shorter than local best tour (one process will have its tour
@@ -261,10 +286,10 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
                 .increase_probabilitities(&global_best);
         }
 
-        global_best
+        (global_best, exchange_duration)
     }
 
-    pub fn best_global_tour(&mut self) -> Tour {
+    pub fn best_global_tour(&mut self) -> (Tour, Duration) {
         // Exchange best tours.
         // let rank = self.mpi.rank();
         let mpi_closure = UserOperation::commutative(|read_buf, write_buf| {
@@ -289,13 +314,17 @@ impl<R: Rng + SeedableRng> TspSolver<R> {
         // This needs to be filled up before exchanging.
         let mut best_global_tour: Vec<CityIndex> = self.best_tour.cities().to_owned();
 
+        let timer = Instant::now();
         self.mpi
             .all_reduce_into(self.best_tour.cities(), &mut best_global_tour, &mpi_closure);
+        let elapsed = timer.elapsed();
 
         // Remove tour length hack.
         self.best_tour.remove_hack_length();
 
-        Tour::from_hack_cities(best_global_tour)
+        let best_global = Tour::from_hack_cities(best_global_tour);
+
+        (best_global, elapsed)
     }
 
     fn evolve_inner_opt(&mut self) -> SingleGenerationTimingInfo {

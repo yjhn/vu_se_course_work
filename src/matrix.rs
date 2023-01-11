@@ -56,7 +56,7 @@ where
 
 impl Display for SquareMatrix<f64> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "--- SquareMatrix<f64> ---")?;
+        f.write_str("--- SquareMatrix<f64> ---\n")?;
         for row in self.data.chunks_exact(self.side_length) {
             for elem in row {
                 write!(f, "{elem:.2}\t")?;

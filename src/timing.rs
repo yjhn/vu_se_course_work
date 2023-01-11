@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+#[derive(Debug, Clone, Copy)]
 pub struct SingleGenerationTimingInfo {
     tour_generation_from_prob_matrix: Duration,
     tour_optimization: Duration,
@@ -59,5 +60,21 @@ impl GenerationsInfo {
 
     pub fn optimized_length(&self) -> &[u32] {
         self.optimized_length.as_ref()
+    }
+
+    pub fn len(&self) -> usize {
+        self.tour_generation_from_prob_matrix.len()
+    }
+
+    /// Extends the Vecs to have exactly `total_len` records
+    /// by duplicating the last record.
+    pub fn extend_duplicate(&mut self, total_len: usize) {
+        let last_1 = *self.tour_generation_from_prob_matrix.last().unwrap();
+        let last_2 = *self.tour_optimization.last().unwrap();
+        let last_3 = *self.optimized_length.last().unwrap();
+
+        for _ in 0..(total_len - self.len()) {
+            self.add_generation(last_1, last_2, last_3);
+        }
     }
 }
