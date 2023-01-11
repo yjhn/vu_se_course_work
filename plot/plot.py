@@ -48,6 +48,7 @@ ADD_TITLE = [
     "cores_diff_gens",
     "cores_diff_algos"
 ]
+MAX_GENERATIONS = 500
 
 # Optimal problem (test case) lengths
 OPTIMAL_LENGTHS = {
@@ -58,9 +59,9 @@ OPTIMAL_LENGTHS = {
 }
 
 DIAGRAM_TITLES = {\
-    "Cga": "LKGA algoritmas",
-    "Cga + 2-opt": "LKGA + 2-opt algoritmas",
-    "Cga + 3-opt": "LKGA + 3-opt algoritmas"
+    "cga": "LKGA",
+    "cga2opt": "LKGA + 2-opt",
+    "cga3opt": "LKGA + 3-opt"
 }
 
 ALGO_TO_FILE_NAME_PART = {
@@ -100,7 +101,12 @@ class RecordMetaInfo:
         self.repeat_time = int(fields[2])
         self.generations = int(fields[3])
         self.reached_optimal_length = fields[4]
+        if self.reached_optimal_length == "true":
+            raise RuntimeError("Reached optimal length")
         self.reached_length = int(fields[5])
+        # If average exchange duration is recorded.
+        if len(meta_info_line) == 7:
+            self.average_best_tour_echange_duration = int(fields[6])
 
 class Record:
     def __init__(self, record):
@@ -123,13 +129,16 @@ class RecordGroup:
 
 class FileMetaInfo:
     def __init__(self, header, file_name):
-        self.file_name = file_name
+        # format:
+        # <dir>/bm_<test case>_<algo>_<cpu count>_cpus_p<population size>.out
+        self.file_name = file_name.split("/")[-1]
         header_lines = header.split('\n')
-        assert(len(header_lines) == 3)
+        assert(len(header_lines) == 4)
         self.problem_name = header_lines[1].split(": ")[1]
         self.optimal_length = OPTIMAL_LENGTHS[self.problem_name]
         self.cpu_count = int(header_lines[2].split(": ")[1])
-        self.algorithm = file_name.split("alg_")[1].split("_")[0]
+        self.population_size = int(header_lines[3].split(": ")[1])
+        self.algorithm = self.file_name.split("_")[2]
 
 def parse_int_list(text, separator=','):
     parts = text.split(separator)
@@ -195,7 +204,7 @@ def main():
                         nargs="+",
                         required=False,
                         default=TEST_CASES)
-    # will average over the given exchange generations as they
+    # TODO: maybe average over the given exchange generations as they
     # do not make any meaningful difference
     parser.add_argument("-e", "--exchange-generations",
                         choices=EXCHANGE_GENERATIONS,
@@ -207,7 +216,12 @@ def main():
     parser.add_argument("-g", "--generation-count",
                         type=int,
                         required=False,
-                        default=500)
+                        default=MAX_GENERATIONS)
+    # Population size
+    parser.add_argument("--population-size",
+                        type=int,
+                        required=False,
+                        default=128)
     # what kind of plots to generate
     parser.add_argument("-k", "--plot-kinds",
                         choices=PLOT_KINDS,
@@ -245,6 +259,7 @@ def main():
     test_cases = args.test_cases
     max_generations = args.generation_count
     exc_gens = args.exchange_generations
+    population_size = args.population_size
     plot_kinds = args.plot_kinds
     add_titles = args.add_titles
     add_title_0 = PLOT_KINDS[0] in add_titles
@@ -262,6 +277,7 @@ def main():
                     algo=a,
                     exc_gens=e,
                     max_gens=max_generations,
+                    pop_size=population_size,
                     results_dir=results_dir
                     )
             
@@ -274,6 +290,7 @@ def main():
                         core_counts=core_counts,
                         exc_gens=e,
                         max_gens=max_generations,
+                        pop_size=population_size,
                         results_dir=results_dir
                         )
     
@@ -287,6 +304,7 @@ def main():
                     core_counts=core_counts,
                     exc_gens=e,
                     max_gens=max_generations,
+                    pop_size=population_size,
                     results_dir=results_dir
                     )
     
@@ -297,6 +315,7 @@ def main():
             algos=algos,
             test_cases=test_cases,
             core_counts=core_counts,
+            pop_size=population_size,
             add_title=add_title_0)
 
 def canonicalize_dir(directory):
@@ -319,8 +338,12 @@ def one_exchange_gen_avg(record_group):
     # Average the generation lengths
     rec_gen_len_len = len(records_gen_lengths)
     avg_gen_lengths = []
-    for i in range(0, 500):
-        sum_total = records_gen_lengths[0][i]
+    for i in range(0, MAX_GENERATIONS):
+        try:
+            sum_total = records_gen_lengths[0][i]
+        except:
+            print(i)
+            raise
         for j in range(1, rec_gen_len_len):
             sum_total += records_gen_lengths[j][i]
         avg = sum_total / rec_gen_len_len
@@ -374,8 +397,8 @@ def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name, 
     plt.close()
 
 # dir must end with '/'
-def make_file_name(directory, test_case, algo, cpus):
-    return f"{directory}bm_{test_case}_alg_{algo}_{cpus}_cpus.out"
+def make_file_name(directory, test_case, algo, cpus, pop_size):
+    return f"{directory}bm_{test_case}_{algo}_{cpus}_cpus_p{pop_size}.out"
 
 # Plots the difference from the optimal length.
 # x axis - generations
@@ -387,6 +410,7 @@ def plot_basic(
     algos,
     test_cases,
     core_counts,
+    pop_size,
     add_title):
     
     x_axis_values = np.arange(1, 501)
@@ -394,9 +418,7 @@ def plot_basic(
     for a in algos:
         for t in test_cases:
             for c in core_counts:
-                file_name = make_file_name(directory, t, a, c)
-    # for name in os.listdir(directory):
-                # file_name = directory + name
+                file_name = make_file_name(directory, t, a, c, pop_size)
                 (meta, data) = parse_benchmark_results(file_name)
                 
                 problem_name = meta.problem_name
@@ -411,7 +433,7 @@ def plot_basic(
                 else:
                     cpus_name = "branduoliai"
                 if add_title:
-                    title = f"{DIAGRAM_TITLES[algorithm]}, \\texttt{{{problem_name}}}, {cpu_count} {cpus_name}"
+                    title = f"{DIAGRAM_TITLES[algorithm]}, \\texttt{{{problem_name}}}, $B = {cpu_count}$, $P = {pop_size}$"
                 else:
                     title = ""
                 xlabel = "genetinio algoritmo karta"
@@ -444,9 +466,10 @@ def plot_cores_diff_from_opt_test_cases(
     algo,
     exc_gens,
     max_gens,
+    pop_size,
     results_dir):
     
-    title = f"{algo} skirtumas nuo optimalaus po ${max_gens}$ kartų, $D_m={exc_gens}$"
+    title = f"{algo}, $K = {max_gens}$ kart\\~{{ų}}, $D_m={exc_gens}$, $P = {pop_size}$"
     x_values = core_counts
     xlabel = CORE_COUNT_AXIS_LABEL
     ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
@@ -458,7 +481,7 @@ def plot_cores_diff_from_opt_test_cases(
         labels_all_test_cases.append(f"\texttt{{{t}}}")
         diffs_all_core_counts = []
         for c in core_counts:
-            file_name = make_file_name(directory, t, algo, c)
+            file_name = make_file_name(directory, t, algo, c, pop_size)
             (meta, data) = parse_benchmark_results(file_name)
             parsed_files.append((meta, data))
             # we only care about the record group that has the desired
@@ -494,9 +517,10 @@ def plot_cores_diff_from_opt_generations(
     core_counts,
     exc_gens,
     max_gens,
+    pop_size,
     results_dir):
     
-    title = f"\texttt{{{test_case}}}, {algo}, $D_m={exc_gens}$"
+    title = f"\texttt{{{test_case}}}, {algo}, $D_m={exc_gens}$, $P = {pop_size}$"
     x_values = core_counts
     xlabel = CORE_COUNT_AXIS_LABEL
     ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
@@ -509,7 +533,7 @@ def plot_cores_diff_from_opt_generations(
         labels_all_gens_counts.append(str(g + 1))
         diffs_single_gens_count = []
         for c in core_counts:
-            file_name = make_file_name(directory, test_case, algo, c)
+            file_name = make_file_name(directory, test_case, algo, c, pop_size)
             (meta, data) = parse_benchmark_results(file_name)
             parsed_files.append((meta, data))
             # we only care about the record group that has the desired
@@ -544,9 +568,10 @@ def plot_cores_diff_from_opt_algos(
     core_counts,
     exc_gens,
     max_gens,
+    pop_size,
     results_dir):
     
-    title = f"\texttt{{{test_case}}}, $D_m = {exc_gens}$"
+    title = f"\texttt{{{test_case}}}, $D_m = {exc_gens}$, $P = {pop_size}$"
     x_values = core_counts
     xlabel = CORE_COUNT_AXIS_LABEL
     ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
@@ -558,7 +583,7 @@ def plot_cores_diff_from_opt_algos(
         labels_all_algos.append(a)
         diffs_single_algo = []
         for c in core_counts:
-            file_name = make_file_name(directory, test_case, a, c)
+            file_name = make_file_name(directory, test_case, a, c, pop_size)
             (meta, data) = parse_benchmark_results(file_name)
             parsed_files.append((meta, data))
             # we only care about the record group that has the desired
