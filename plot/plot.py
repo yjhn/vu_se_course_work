@@ -58,15 +58,15 @@ OPTIMAL_LENGTHS = {
 }
 
 DIAGRAM_TITLES = {\
-    "Cga": "Cga algoritmo trumpiausias kelias",
+    "Cga": "LKGA algoritmas",
     "Cga + 2-opt": "LKGA + 2-opt algoritmas",
     "Cga + 3-opt": "LKGA + 3-opt algoritmas"
 }
 
 ALGO_TO_FILE_NAME_PART = {
-    "cga": "Cga",
-    "cga2opt": "Cga + 2-opt",
-    "cga3opt": "Cga + 3-opt"
+    "cga": "cga",
+    "cga2opt": "cga2opt",
+    "cga3opt": "cga3opt"
 }
 
 # controls where in the plot the legend is placed
