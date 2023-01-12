@@ -156,7 +156,7 @@ def parse_int_list(text, separator=','):
 def parse_benchmark_results(file_name):
     with open(file_name, "r") as file:
         full_content = file.read()
-    
+
     (header, content) = separate_header(full_content)
     file_meta_info = FileMetaInfo(header, file_name)
     
@@ -173,7 +173,7 @@ def separate_header(text):
 
 # Separates main content into record groups.
 def separate_by_exchange_gens(text):
-    # In theory record group sepearator is "\n\n\n", but in practice
+    # In theory record group separator is "\n\n\n", but in practice
     # after last record in record group "\n\n" is written,
     # so true record group separator is "\n\n\n\n\n".
     parts = text.split("\n\n\n\n\n")
