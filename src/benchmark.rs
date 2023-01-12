@@ -3,7 +3,7 @@ use std::io::Write;
 use std::{fmt::Display, path::Path};
 
 use mpi::topology::{Process, SystemCommunicator};
-use mpi::traits::Communicator;
+use mpi::traits::{Communicator, Root};
 use rand::{Rng, SeedableRng};
 
 use crate::initialize_random_seed;
@@ -49,6 +49,10 @@ pub fn benchmark<PD, R>(
                 world.size()
             );
 
+            // This must be an array upfront, we can't make this an array
+            // at root_process.broadcast_into() call site for some reason.
+            // TODO: investigate.
+            let mut skip = [false];
             let mut file = if is_root {
                 let res_file = OpenOptions::new()
                     .write(true)
@@ -62,7 +66,13 @@ pub fn benchmark<PD, R>(
                             println!(
                                 "Skipping benchmark due to existing results file:\n{save_file_path}"
                             );
-                            continue;
+                            skip[0] = true;
+
+                            OpenOptions::new()
+                                .read(false)
+                                .write(true)
+                                .open("/dev/null")
+                                .unwrap()
                         } else {
                             println!(
                                 "Will not overwrite existing benchmark results file:\n{save_file_path}"
@@ -79,6 +89,11 @@ pub fn benchmark<PD, R>(
                     .open("/dev/null")
                     .unwrap()
             };
+            // Exchange info whether this iteration needs to be skipped.
+            root_process.broadcast_into(&mut skip);
+            if skip[0] {
+                continue;
+            }
 
             if is_root {
                 writeln!(file, "Problem file name: {path}").unwrap();
