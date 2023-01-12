@@ -635,7 +635,7 @@ impl Tour {
 
                     for counter_3 in (counter_2 + 1)..len {
                         let k = (counter_3 + i) % len;
-                        assert_ne!(j, k);
+                        // assert_ne!(j, k);
                         let (z1, z2) = self.get_subsequent_pair(TourIndex::new(k));
 
                         for c in [

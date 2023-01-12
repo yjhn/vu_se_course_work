@@ -72,8 +72,9 @@ fn main() {
         bench_repeat_times,
         algorithms,
         bench_results_dir,
-        population_size,
+        population_sizes,
         exchange_generations,
+        skip_duplicates,
     } = arguments::Args::parse();
 
     let algorithms: Vec<Algorithm> = algorithms
@@ -88,7 +89,7 @@ fn main() {
         println!("Benchmark repeat times: {bench_repeat_times}");
         println!("Algorithms: {algorithms:?}");
         println!("Benchmark results directory: {bench_results_dir}");
-        println!("Population size: {population_size}");
+        println!("Population size: {population_sizes:?}");
         println!("Exchange generations: {exchange_generations:?}");
     }
 
@@ -111,6 +112,12 @@ fn main() {
                 exchange_generations.as_slice()
             };
 
+            let pop_sizes = if population_sizes.is_empty() {
+                &[POPULATION_SIZE]
+            } else {
+                population_sizes.as_slice()
+            };
+
             benchmark::benchmark::<&str, config::MainRng>(
                 &path,
                 problem_name,
@@ -121,9 +128,10 @@ fn main() {
                 rank,
                 is_root,
                 bench_repeat_times,
-                population_size,
+                pop_sizes,
                 exc_gen,
                 &algorithms,
+                skip_duplicates,
                 &bench_results_dir,
             );
         }
