@@ -3,6 +3,10 @@ import argparse
 import matplotlib as mpl
 import numpy as np
 
+# For number decimal separator formatting.
+import locale
+locale.setlocale(locale.LC_ALL, 'lt_LT.utf8')
+
 # Run:
 # python plot.py -d ../all_bench_results -t att532 gr666 rat783 pr1002 -p pgf -f pgf
 
@@ -40,10 +44,11 @@ PLOT_KINDS = [
     "cores_diff_test_cases",
     "cores_diff_gens",
     "cores_diff_algos",
-    "gens_diff_popsizes"
+    "gens_diff_popsizes",
+    "cores_diff_popsizes"
 ]
 MAX_GENERATIONS = 500
-POPULATION_SIZES = [16, 32, 64, 128, 256]
+POPULATION_SIZES = [2, 4, 8, 16, 32, 64, 128, 256]
 
 # Optimal problem (test case) lengths
 OPTIMAL_LENGTHS = {
@@ -80,6 +85,10 @@ PLOT_FORMAT = "pgf"
 
 # pgf plot scale
 PLOT_SCALE = 1.0
+
+# For controlling Y axis range (ylim)
+Y_TOP = None
+Y_BOTTOM = None
 
 # height / width
 PLOT_ASPECT_RATIO = 0.8
@@ -236,12 +245,22 @@ def main():
                         type=float,
                         required=False,
                         default=PLOT_SCALE)
+    global Y_TOP
+    global Y_BOTTOM
+    parser.add_argument("--y-top",
+                        type=float,
+                        required=False,
+                        default=Y_TOP)
+    parser.add_argument("--y-bottom",
+                        type=float,
+                        required=False,
+                        default=Y_BOTTOM)
     # Whether to add diagram title to the specified plot kind.
     # Currently only affects gens_diff_excg.
-    parser.add_argument("--add-title",
-                        choices=[0, 1],
+    parser.add_argument("--no-titles",
+                        type=bool,
                         required=False,
-                        default=1)
+                        default=False)
     args = parser.parse_args()
     directory = canonicalize_dir(args.directory)
     results_dir = canonicalize_dir(args.plot_directory)
@@ -250,6 +269,8 @@ def main():
 
     PLOT_FORMAT = args.plot_format
     PLOT_SCALE = args.plot_scale
+    Y_TOP = args.y_top
+    Y_BOTTOM = args.y_bottom
 
     algos = list(map(lambda x: ALGO_TO_FILE_NAME_PART[x], args.algorithms))
     core_counts = args.core_counts
@@ -258,7 +279,7 @@ def main():
     exc_gens = args.exchange_generations
     population_sizes = args.population_sizes
     plot_kinds = args.plot_kinds
-    add_title = (args.add_title == 1)
+    add_title = not args.no_titles
 
     if "cores_diff_test_cases" in plot_kinds:
         for a in algos:
@@ -295,7 +316,7 @@ def main():
         for a in algos:
             for t in test_cases:
                 for c in core_counts:
-                    plot_generations_diff_from_opt_exc_gen(
+                    plot_generations_diff_from_opt_pop_sizes(
                         directory=directory,
                         test_case=t,
                         algo=a,
@@ -306,6 +327,22 @@ def main():
                         results_dir=results_dir,
                         add_title=add_title
                         )
+
+    if "cores_diff_popsizes" in plot_kinds:
+        for a in algos:
+            for t in test_cases:
+                plot_cores_diff_from_opt_pop_sizes(
+                    directory=directory,
+                    test_case=t,
+                    algo=a,
+                    core_counts=core_counts,
+                    exc_gens=exc_gens,
+                    max_gens=max_generations,
+                    pop_sizes=population_sizes,
+                    results_dir=results_dir,
+                    add_title=add_title
+                    )
+
 
     if "cores_diff_algos" in plot_kinds:
         for t in test_cases:
@@ -368,7 +405,7 @@ def one_exchange_gen_avg(record_group):
 # x_values = array
 # y_values = array of arrays
 # labels = array of labels, len(labels) == len(y_values)
-def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name, add_title, style={"marker": "o", "linestyle": "dashed"}):
+def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name, add_title, xticks=None, style={"marker": ".", "linestyle": "dashed", "linewidth": 0.75}):
     if PLOT_FORMAT == "pgf":
         # mpl.use() must be called before importing pyplot
         mpl.use("pgf")
@@ -383,10 +420,12 @@ def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name, 
             "xtick.labelsize": 8,
             "ytick.labelsize": 8,
             "legend.fontsize": 8,
-            "legend.handlelength": 1.5,
+            "legend.labelspacing": 0.1,
+            "legend.handlelength": 1.2,
             "legend.frameon": False,
             "legend.shadow": False,
-            "legend.borderaxespad": 0.1,
+            "legend.borderaxespad": 0.0,
+            "axes.formatter.use_locale": True # use decimal separator ','
         })
         fig = plt.figure(figsize=set_size(fraction=PLOT_SCALE))
     else:
@@ -394,11 +433,14 @@ def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name, 
     
     for (y, l) in zip(y_values, labels):
         plt.plot(x_values, y, label=l, **style)
+    if xticks is not None:
+        plt.xticks(xticks)
     plt.legend(loc=PLOT_LEGEND_LOCATION)
     if add_title:
         plt.title(title)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
+    plt.ylim(top=Y_TOP, bottom=Y_BOTTOM)
     final_file_name = f"{file_name}.{PLOT_FORMAT}"
     if os.path.exists(final_file_name):
         raise FileExistsError(f"Will not overwrite existing plot file:\n{final_file_name}")
@@ -460,7 +502,7 @@ def plot_basic(
                     ylabel=ylabel,
                     file_name=file_name,
                     add_title=add_title,
-                    style={}
+                    style={"linewidth": 1}
                     )
 
 
@@ -477,11 +519,15 @@ def plot_cores_diff_from_opt_test_cases(
     results_dir,
     add_title):
     
-    title = f"{ALGO_DISPLAY_NAMES[algo]}, $K = {max_gens}$ kart\\~{{ų}}, $P = {pop_size}$"
+    if len(exc_gens) == 1:
+        title = f"{ALGO_DISPLAY_NAMES[algo]}, $D_m = {exc_gens[0]}$, $K = {max_gens}$ kart\\~{{ų}}, $P = {pop_size}$"
+        plot_file_name = f"cores_diff_from_opt_test_cases_{algo}_egen_{exc_gens[0]}_p{pop_size}"
+    else:
+        title = f"{ALGO_DISPLAY_NAMES[algo]}, $K = {max_gens}$ kart\\~{{ų}}, $P = {pop_size}$"
+        plot_file_name = f"cores_diff_from_opt_test_cases_{algo}_p{pop_size}"
     x_values = core_counts
     xlabel = CORE_COUNT_AXIS_LABEL
     ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
-    plot_file_name = f"cores_diff_from_opt_test_cases_{algo}_p{pop_size}"
     parsed_files = []
     labels_all_test_cases = []
     diffs_all_test_cases = []
@@ -494,9 +540,10 @@ def plot_cores_diff_from_opt_test_cases(
             parsed_files.append((meta, data))
             total = 0
             # We are only interested in exc_gens specified.
-            required_exc_gens = list(filter(lambda rg: rg.exc_gens in exc_gens, data))
-            required_exc_gens_count = len(required_exc_gens)
+            required_exc_gens = filter(lambda rg: rg.exc_gens in exc_gens, data)
+            required_exc_gens_count = 0
             for r_group in required_exc_gens:
+                required_exc_gens_count += 1
                 for rec in r_group.records:
                     total += rec.lengths[max_gens - 1]
             avg = total / (r_group.record_count * required_exc_gens_count)
@@ -510,6 +557,7 @@ def plot_cores_diff_from_opt_test_cases(
             title=title,
             xlabel=xlabel,
             ylabel=ylabel,
+            xticks=core_counts,
             file_name=results_dir + plot_file_name,
             add_title=add_title
             )
@@ -528,11 +576,15 @@ def plot_cores_diff_from_opt_generations(
     results_dir,
     add_title):
     
-    title = f"{ALGO_DISPLAY_NAMES[algo]}, \\texttt{{{test_case}}}, $P = {pop_size}$"
+    if len(exc_gens) == 1:
+        title = f"{ALGO_DISPLAY_NAMES[algo]}, \\texttt{{{test_case}}}, $D_m = {exc_gens[0]}$, $P = {pop_size}$"
+        plot_file_name = f"cores_diff_from_opt_gens_{test_case}_{algo}_egen_{exc_gens[0]}_p{pop_size}"
+    else:
+        title = f"{ALGO_DISPLAY_NAMES[algo]}, \\texttt{{{test_case}}}, $P = {pop_size}$"
+        plot_file_name = f"cores_diff_from_opt_gens_{test_case}_{algo}_p{pop_size}"
     x_values = core_counts
     xlabel = CORE_COUNT_AXIS_LABEL
     ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
-    plot_file_name = f"cores_diff_from_opt_gens_{test_case}_{algo}_p{pop_size}"
     parsed_files = []
     labels_all_gens_counts = []
     diffs_all_gens_counts = []
@@ -546,9 +598,10 @@ def plot_cores_diff_from_opt_generations(
             parsed_files.append((meta, data))
             total = 0
             # We are only interested in exc_gens specified.
-            required_exc_gens = list(filter(lambda rg: rg.exc_gens in exc_gens, data))
-            required_exc_gens_count = len(required_exc_gens)
+            required_exc_gens = filter(lambda rg: rg.exc_gens in exc_gens, data)
+            required_exc_gens_count = 0
             for r_group in required_exc_gens:
+                required_exc_gens_count += 1
                 for rec in r_group.records:
                     total += rec.lengths[g]
             avg = total / (r_group.record_count * required_exc_gens_count)
@@ -562,6 +615,7 @@ def plot_cores_diff_from_opt_generations(
             title=title,
             xlabel=xlabel,
             ylabel=ylabel,
+            xticks=core_counts,
             file_name=results_dir + plot_file_name,
             add_title=add_title
             )
@@ -580,11 +634,15 @@ def plot_cores_diff_from_opt_algos(
     results_dir,
     add_title):
     
-    title = f"\\texttt{{{test_case}}}, $K = {max_gens}$ kart\\~{{ų}} $P = {pop_size}$"
+    if len(exc_gens) == 1:
+        title = f"\\texttt{{{test_case}}}, $D_m = {exc_gens[0]}$, $K = {max_gens}$ kart\\~{{ų}} $P = {pop_size}$"
+        plot_file_name = f"cores_diff_from_opt_algos_{test_case}_mgen_{max_gens}_egen_{exc_gens[0]}_p{pop_size}"
+    else:
+        title = f"\\texttt{{{test_case}}}, $K = {max_gens}$ kart\\~{{ų}} $P = {pop_size}$"
+        plot_file_name = f"cores_diff_from_opt_algos_{test_case}_mgen_{max_gens}_p{pop_size}"
     x_values = core_counts
     xlabel = CORE_COUNT_AXIS_LABEL
     ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
-    plot_file_name = f"cores_diff_from_opt_algos_{test_case}_mgen_{max_gens}"
     parsed_files = []
     labels_all_algos = []
     diffs_all_algos = []
@@ -597,9 +655,10 @@ def plot_cores_diff_from_opt_algos(
             parsed_files.append((meta, data))
             total = 0
             # We are only interested in exc_gens specified.
-            required_exc_gens = list(filter(lambda rg: rg.exc_gens in exc_gens, data))
-            required_exc_gens_count = len(required_exc_gens)
+            required_exc_gens = filter(lambda rg: rg.exc_gens in exc_gens, data)
+            required_exc_gens_count = 0
             for r_group in required_exc_gens:
+                required_exc_gens_count += 1
                 for rec in r_group.records:
                     total += rec.lengths[max_gens - 1]
             avg = total / (r_group.record_count * required_exc_gens_count)
@@ -613,6 +672,7 @@ def plot_cores_diff_from_opt_algos(
             title=title,
             xlabel=xlabel,
             ylabel=ylabel,
+            xticks=core_counts,
             file_name=results_dir + plot_file_name,
             add_title=add_title
             )
@@ -620,7 +680,7 @@ def plot_cores_diff_from_opt_algos(
 
 # Generations on X axis, difference from optimal on Y,
 # plots multiple population sizes and a single test case.
-def plot_generations_diff_from_opt_exc_gen(
+def plot_generations_diff_from_opt_pop_sizes(
     directory,
     test_case,
     algo,
@@ -631,26 +691,31 @@ def plot_generations_diff_from_opt_exc_gen(
     results_dir,
     add_title):
     
-    title = f"{ALGO_DISPLAY_NAMES[algo]} \\texttt{{{test_case}}}, $B = {core_count}$"
+    if len(exc_gens) == 1:
+        title = f"{ALGO_DISPLAY_NAMES[algo]} \\texttt{{{test_case}}}, $D_m = {exc_gens[0]}$, $B = {core_count}$"
+        plot_file_name = f"gens_diff_from_opt_pop_sizes_{test_case}_{algo}_cpus_{core_count}_mgen_{max_gens}_egen_{exc_gens[0]}"
+    else:
+        title = f"{ALGO_DISPLAY_NAMES[algo]} \\texttt{{{test_case}}}, $B = {core_count}$"
+        plot_file_name = f"gens_diff_from_opt_pop_sizes_{test_case}_{algo}_cpus_{core_count}_mgen_{max_gens}"
     x_values = np.arange(1, max_gens + 1)
     xlabel = GENERATIONS_AXIS_LABEL
     ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
-    plot_file_name = f"gens_diff_from_opt_exc_gens_{test_case}_{algo}_cpus_{core_count}_mgen_{max_gens}"
     parsed_files = []
     labels_all_pop_sizes = []
     diffs_all_pop_sizes = []
     for p in pop_sizes:
         diffs_single_pop_size = []
+        labels_all_pop_sizes.append(f"$P = {p}$")
         for g in range(0, max_gens):
-            labels_all_pop_sizes.append(f"$P = {p}$")
             file_name = make_file_name(directory, test_case, algo, core_count, p)
             (meta, data) = parse_benchmark_results(file_name)
             parsed_files.append((meta, data))
             total = 0
             # We are only interested in exc_gens specified.
-            required_exc_gens = list(filter(lambda rg: rg.exc_gens in exc_gens, data))
-            required_exc_gens_count = len(required_exc_gens)
+            required_exc_gens = filter(lambda rg: rg.exc_gens in exc_gens, data)
+            required_exc_gens_count = 0
             for r_group in required_exc_gens:
+                required_exc_gens_count += 1
                 for rec in r_group.records:
                     total += rec.lengths[g]
             avg = total / (r_group.record_count * required_exc_gens_count)
@@ -664,6 +729,63 @@ def plot_generations_diff_from_opt_exc_gen(
             title=title,
             xlabel=xlabel,
             ylabel=ylabel,
+            file_name=results_dir + plot_file_name,
+            add_title=add_title
+            )
+
+
+# Core count on X axis, difference from optimal on Y,
+# plots multiple population sizes and a single test case.
+def plot_cores_diff_from_opt_pop_sizes(
+    directory,
+    test_case,
+    algo,
+    core_counts,
+    exc_gens,
+    max_gens,
+    pop_sizes,
+    results_dir,
+    add_title):
+    
+    if len(exc_gens) == 1:
+        title = f"{ALGO_DISPLAY_NAMES[algo]} \\texttt{{{test_case}}}, $D_m = {exc_gens[0]}$, $K = {max_gens}$"
+        plot_file_name = f"cores_diff_from_opt_pop_sizes_{test_case}_{algo}_mgen_{max_gens}_egen_{exc_gens[0]}"
+    else:
+        title = f"{ALGO_DISPLAY_NAMES[algo]} \\texttt{{{test_case}}}, $K = {max_gens}$"
+        plot_file_name = f"cores_diff_from_opt_pop_sizes_{test_case}_{algo}_mgen_{max_gens}"
+    x_values = core_counts
+    xlabel = CORE_COUNT_AXIS_LABEL
+    ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
+    parsed_files = []
+    labels_all_pop_sizes = []
+    diffs_all_pop_sizes = []
+    for p in pop_sizes:
+        diffs_single_pop_size = []
+        labels_all_pop_sizes.append(f"$P = {p}$")
+        for c in core_counts:
+            file_name = make_file_name(directory, test_case, algo, c, p)
+            (meta, data) = parse_benchmark_results(file_name)
+            parsed_files.append((meta, data))
+            total = 0
+            # We are only interested in exc_gens specified.
+            required_exc_gens = filter(lambda rg: rg.exc_gens in exc_gens, data)
+            required_exc_gens_count = 0
+            for r_group in required_exc_gens:
+                required_exc_gens_count += 1
+                for rec in r_group.records:
+                    total += rec.lengths[max_gens - 1]
+            avg = total / (r_group.record_count * required_exc_gens_count)
+            diff = percent_diff_from_optimal(avg, meta.optimal_length)
+            diffs_single_pop_size.append(diff)
+        diffs_all_pop_sizes.append(diffs_single_pop_size)
+    
+    plot_and_save(x_values=x_values,
+            y_values=diffs_all_pop_sizes,
+            labels=labels_all_pop_sizes,
+            title=title,
+            xlabel=xlabel,
+            ylabel=ylabel,
+            xticks=core_counts,
             file_name=results_dir + plot_file_name,
             add_title=add_title
             )
