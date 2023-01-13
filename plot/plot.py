@@ -424,6 +424,7 @@ def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name, 
             "legend.handlelength": 1.2,
             "legend.frameon": False,
             "legend.shadow": False,
+            "legend.borderpad": 0.4,
             "legend.borderaxespad": 0.0,
             "axes.formatter.use_locale": True # use decimal separator ','
         })
@@ -747,12 +748,13 @@ def plot_cores_diff_from_opt_pop_sizes(
     results_dir,
     add_title):
     
+    popstring = '_'.join(map(str, pop_sizes))
     if len(exc_gens) == 1:
         title = f"{ALGO_DISPLAY_NAMES[algo]} \\texttt{{{test_case}}}, $D_m = {exc_gens[0]}$, $K = {max_gens}$"
-        plot_file_name = f"cores_diff_from_opt_pop_sizes_{test_case}_{algo}_mgen_{max_gens}_egen_{exc_gens[0]}"
+        plot_file_name = f"cores_diff_from_opt_pop_sizes_{test_case}_{algo}_mgen_{max_gens}_egen_{exc_gens[0]}_p{popstring}"
     else:
         title = f"{ALGO_DISPLAY_NAMES[algo]} \\texttt{{{test_case}}}, $K = {max_gens}$"
-        plot_file_name = f"cores_diff_from_opt_pop_sizes_{test_case}_{algo}_mgen_{max_gens}"
+        plot_file_name = f"cores_diff_from_opt_pop_sizes_{test_case}_{algo}_mgen_{max_gens}_p{popstring}"
     x_values = core_counts
     xlabel = CORE_COUNT_AXIS_LABEL
     ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
