@@ -443,6 +443,8 @@ def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name, 
         plt.plot(x_values, y, label=l, **style)
     if xticks is not None:
         plt.xticks(xticks)
+    if yticks is not None:
+        plt.yticks(yticks)
     plt.legend(loc=legend_location)
     if add_title:
         plt.title(title)
