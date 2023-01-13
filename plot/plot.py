@@ -373,7 +373,10 @@ def main():
                 )
 
     if "relative_times" in plot_kinds:
-        plot_relative_times_for_tour_exchange(add_title)
+        plot_relative_times_for_tour_exchange(
+            results_dir=results_dir,
+            add_title=add_title
+            )
 
 
 def canonicalize_dir(directory):
@@ -409,7 +412,7 @@ def one_exchange_gen_avg(record_group):
 # x_values = array
 # y_values = array of arrays
 # labels = array of labels, len(labels) == len(y_values)
-def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name, add_title, xticks=None, style={"marker": ".", "linestyle": "dashed", "linewidth": 0.75}):
+def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name, add_title, xticks=None, yticks=None, style={"marker": ".", "linestyle": "dashed", "linewidth": 0.75}, legend_location=PLOT_LEGEND_LOCATION):
     if PLOT_FORMAT == "pgf":
         # mpl.use() must be called before importing pyplot
         mpl.use("pgf")
@@ -440,7 +443,7 @@ def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name, 
         plt.plot(x_values, y, label=l, **style)
     if xticks is not None:
         plt.xticks(xticks)
-    plt.legend(loc=PLOT_LEGEND_LOCATION)
+    plt.legend(loc=legend_location)
     if add_title:
         plt.title(title)
     plt.xlabel(xlabel)
@@ -799,9 +802,9 @@ def plot_cores_diff_from_opt_pop_sizes(
 
 
 def average(a):
-    sum(a) / len(a)
+    return sum(a) / len(a)
 
-def plot_relative_times_for_tour_exchange(add_title):
+def plot_relative_times_for_tour_exchange(results_dir, add_title):
     TOUR_EXC_TIMES_ATT532_2_CPUS = [3678, 4319, 3437, 3765, 4101]
     TOUR_EXC_TIMES_ATT532_4_CPUS = [8300, 7115, 8022, 7440, 8434]
     TOUR_EXC_TIMES_ATT532_8_CPUS = [11761, 10933, 11863, 10495, 12262]
@@ -852,6 +855,7 @@ def plot_relative_times_for_tour_exchange(add_title):
     ylabel = "santykinis laikas"
     xvalues = [2, 4, 8]
     xticks = [2, 4, 8]
+    yticks = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     
     plot_and_save(x_values=xvalues,
             y_values=averages,
@@ -860,8 +864,10 @@ def plot_relative_times_for_tour_exchange(add_title):
             xlabel=xlabel,
             ylabel=ylabel,
             xticks=xticks,
-            file_name="relative_time_to_exchange_individuals",
-            add_title=add_title
+            yticks=yticks,
+            file_name=results_dir + "relative_time_to_exchange_individuals",
+            add_title=add_title,
+            legend_location="upper left"
             )
 
 # for pgf
