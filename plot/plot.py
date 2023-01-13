@@ -45,7 +45,8 @@ PLOT_KINDS = [
     "cores_diff_gens",
     "cores_diff_algos",
     "gens_diff_popsizes",
-    "cores_diff_popsizes"
+    "cores_diff_popsizes",
+    "relative_times"
 ]
 MAX_GENERATIONS = 500
 POPULATION_SIZES = [2, 4, 8, 16, 32, 64, 128, 256]
@@ -370,6 +371,9 @@ def main():
                 pop_size=p,
                 add_title=add_title
                 )
+
+    if "relative_times" in plot_kinds:
+        plot_relative_times_for_tour_exchange(add_title)
 
 
 def canonicalize_dir(directory):
@@ -731,7 +735,8 @@ def plot_generations_diff_from_opt_pop_sizes(
             xlabel=xlabel,
             ylabel=ylabel,
             file_name=results_dir + plot_file_name,
-            add_title=add_title
+            add_title=add_title,
+            style={"linewidth": 1}
             )
 
 
@@ -792,6 +797,72 @@ def plot_cores_diff_from_opt_pop_sizes(
             add_title=add_title
             )
 
+
+def average(a):
+    sum(a) / len(a)
+
+def plot_relative_times_for_tour_exchange(add_title):
+    TOUR_EXC_TIMES_ATT532_2_CPUS = [3678, 4319, 3437, 3765, 4101]
+    TOUR_EXC_TIMES_ATT532_4_CPUS = [8300, 7115, 8022, 7440, 8434]
+    TOUR_EXC_TIMES_ATT532_8_CPUS = [11761, 10933, 11863, 10495, 12262]
+    TOUR_EXC_TIMES_GR666_2_CPUS = [4754, 4767, 6550, 5304, 5613]
+    TOUR_EXC_TIMES_GR666_4_CPUS = [9629, 11163, 8007, 9457, 10083]
+    TOUR_EXC_TIMES_GR666_8_CPUS = [13266, 14978, 14262, 11976, 13933]
+    TOUR_EXC_TIMES_RAT783_2_CPUS = [8533, 6837, 6868, 11350, 7365]
+    TOUR_EXC_TIMES_RAT783_4_CPUS = [14783, 16501, 19037, 18595, 18171]
+    TOUR_EXC_TIMES_RAT783_8_CPUS = [22227, 23529, 25757, 25914, 24239]
+    TOUR_EXC_TIMES_PR1002_2_CPUS = [12823, 11792, 11032, 11902, 13026]
+    TOUR_EXC_TIMES_PR1002_4_CPUS = [24973, 25967, 23896, 27698, 21294]
+    TOUR_EXC_TIMES_PR1002_8_CPUS = [38182, 35785, 36430, 35394, 36911]
+    
+    labels = [
+        "\\texttt{att532}",
+        "\\texttt{gr666}",
+        "\\texttt{rata783}",
+        "\\texttt{pr1002}"
+    ]
+    
+    baseline = average(TOUR_EXC_TIMES_ATT532_2_CPUS)
+    
+    averages = [
+        [
+            1,
+            average(TOUR_EXC_TIMES_ATT532_4_CPUS) / baseline,
+            average(TOUR_EXC_TIMES_ATT532_8_CPUS) / baseline
+        ],
+        [
+            average(TOUR_EXC_TIMES_GR666_2_CPUS) / baseline,
+            average(TOUR_EXC_TIMES_GR666_4_CPUS) / baseline,
+            average(TOUR_EXC_TIMES_GR666_8_CPUS) / baseline
+        ],
+        [
+            average(TOUR_EXC_TIMES_RAT783_2_CPUS) / baseline,
+            average(TOUR_EXC_TIMES_RAT783_4_CPUS) / baseline,
+            average(TOUR_EXC_TIMES_RAT783_8_CPUS) / baseline
+        ],
+        [
+            average(TOUR_EXC_TIMES_PR1002_2_CPUS) / baseline,
+            average(TOUR_EXC_TIMES_PR1002_4_CPUS) / baseline,
+            average(TOUR_EXC_TIMES_PR1002_8_CPUS) / baseline
+        ]
+    ]
+    
+    title = "LKGA individų apsikeitimo trukmė"
+    xlabel = CORE_COUNT_AXIS_LABEL
+    ylabel = "santykinis laikas"
+    xvalues = [2, 4, 8]
+    xticks = [2, 4, 8]
+    
+    plot_and_save(x_values=xvalues,
+            y_values=averages,
+            labels=labels,
+            title=title,
+            xlabel=xlabel,
+            ylabel=ylabel,
+            xticks=xticks,
+            file_name="relative_time_to_exchange_individuals",
+            add_title=add_title
+            )
 
 # for pgf
 def set_size(fraction=1, subplots=(1, 1)):
