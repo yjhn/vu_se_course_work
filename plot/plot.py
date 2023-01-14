@@ -71,6 +71,9 @@ ALGO_TO_FILE_NAME_PART = {
     "cga3opt": "cga3opt"
 }
 
+GENS_START = 99
+GENS_STEP = 100
+
 # controls where in the plot the legend is placed
 PLOT_LEGEND_LOCATION = "upper right"
 
@@ -222,6 +225,16 @@ def main():
                         type=int,
                         required=False,
                         default=MAX_GENERATIONS)
+    global GENS_START
+    global GENS_STEP
+    parser.add_argument("--gens-start",
+                        type=int,
+                        required=False,
+                        default=GENS_START)
+    parser.add_argument("--gens-step",
+                        type=int,
+                        required=False,
+                        default=GENS_STEP)
     # Population size
     parser.add_argument("--population-sizes",
                         choices=POPULATION_SIZES,
@@ -272,6 +285,8 @@ def main():
     PLOT_SCALE = args.plot_scale
     Y_TOP = args.y_top
     Y_BOTTOM = args.y_bottom
+    GENS_START = args.gens_start
+    GENS_STEP = args.gens_step
 
     algos = list(map(lambda x: ALGO_TO_FILE_NAME_PART[x], args.algorithms))
     core_counts = args.core_counts
@@ -599,7 +614,7 @@ def plot_cores_diff_from_opt_generations(
     labels_all_gens_counts = []
     diffs_all_gens_counts = []
     # TODO: include generation 0
-    for g in range(99, max_gens, 100):
+    for g in range(GENS_START, max_gens, GENS_STEP):
         labels_all_gens_counts.append(f"$K = {str(g + 1)}$")
         diffs_single_gens_count = []
         for c in core_counts:

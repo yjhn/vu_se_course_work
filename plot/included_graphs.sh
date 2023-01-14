@@ -6,7 +6,7 @@
 PLOT_DIR=../../kursinis/plot
 BENCH_RESULTS_DIR=../all_bench_results
 
-rm -rI $PLOT_DIR
+rm -Ir $PLOT_DIR
 
 # Jeigu kas nors nepavyksta, baigiam.
 set -e
@@ -60,3 +60,10 @@ python plot.py -d $BENCH_RESULTS_DIR -a cga2opt -t att532 pr1002 -c 8 --populati
 # Geriausių individų apsikeitimo tarp branduolių santykinis laikas.
 
 python plot.py -d $BENCH_RESULTS_DIR -a cga2opt -t att532 pr1002 -p $PLOT_DIR -f pgf -k relative_times -s 1.0
+
+
+# Kartų skaičiaus įtaka skirtingiems atvejams.
+
+python plot.py -d ../all_bench_results -a cga2opt cga3opt -t att532 gr666 rat783 pr1002 -c 1 2 4 8 --population-sizes 128 -e 4 -p $PLOT_DIR -f pgf -k cores_diff_gens -s 0.45
+
+#python plot.py -d ../all_bench_results -a cga -t att532 gr666 rat783 pr1002 -c 1 2 4 8 --population-sizes 128 -e 4 -p $PLOT_DIR -f pgf -k cores_diff_gens -s 0.45 --gens-start 19999 --gens-step 20000
