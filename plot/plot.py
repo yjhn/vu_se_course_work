@@ -43,7 +43,7 @@ PLOT_KINDS = [
     "gens_diff_excg",
     "cores_diff_test_cases",
     "cores_diff_gens",
-    "cores_diff_algos",
+    "cores_diff_algos", # neįdomiai atrodo, nenaudosiu
     "gens_diff_popsizes",
     "cores_diff_popsizes",
     "relative_times"
@@ -717,10 +717,10 @@ def plot_generations_diff_from_opt_pop_sizes(
     add_title):
     
     if len(exc_gens) == 1:
-        title = f"{ALGO_DISPLAY_NAMES[algo]} \\texttt{{{test_case}}}, $D_m = {exc_gens[0]}$, $B = {core_count}$"
+        title = f"{ALGO_DISPLAY_NAMES[algo]}, \\texttt{{{test_case}}}, $D_m = {exc_gens[0]}$, $B = {core_count}$"
         plot_file_name = f"gens_diff_from_opt_pop_sizes_{test_case}_{algo}_cpus_{core_count}_mgen_{max_gens}_egen_{exc_gens[0]}"
     else:
-        title = f"{ALGO_DISPLAY_NAMES[algo]} \\texttt{{{test_case}}}, $B = {core_count}$"
+        title = f"{ALGO_DISPLAY_NAMES[algo]}, \\texttt{{{test_case}}}, $B = {core_count}$"
         plot_file_name = f"gens_diff_from_opt_pop_sizes_{test_case}_{algo}_cpus_{core_count}_mgen_{max_gens}"
     x_values = np.arange(1, max_gens + 1)
     xlabel = GENERATIONS_AXIS_LABEL
@@ -775,10 +775,10 @@ def plot_cores_diff_from_opt_pop_sizes(
     
     popstring = '_'.join(map(str, pop_sizes))
     if len(exc_gens) == 1:
-        title = f"{ALGO_DISPLAY_NAMES[algo]} \\texttt{{{test_case}}}, $D_m = {exc_gens[0]}$, $K = {max_gens}$"
+        title = f"{ALGO_DISPLAY_NAMES[algo]}, \\texttt{{{test_case}}}, $D_m = {exc_gens[0]}$, $K = {max_gens}$"
         plot_file_name = f"cores_diff_from_opt_pop_sizes_{test_case}_{algo}_mgen_{max_gens}_egen_{exc_gens[0]}_p{popstring}"
     else:
-        title = f"{ALGO_DISPLAY_NAMES[algo]} \\texttt{{{test_case}}}, $K = {max_gens}$"
+        title = f"{ALGO_DISPLAY_NAMES[algo]}, \\texttt{{{test_case}}}, $K = {max_gens}$"
         plot_file_name = f"cores_diff_from_opt_pop_sizes_{test_case}_{algo}_mgen_{max_gens}_p{popstring}"
     x_values = core_counts
     xlabel = CORE_COUNT_AXIS_LABEL

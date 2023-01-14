@@ -52,14 +52,17 @@ python plot.py -d $BENCH_RESULTS_DIR -a cga2opt -t att532 gr666 rat783 pr1002 -c
 python plot.py -d $BENCH_RESULTS_DIR -a cga2opt -t att532 gr666 rat783 pr1002 -c 1 2 4 8 --population-sizes 32 64 128 256 -p $PLOT_DIR -f pgf -k cores_diff_popsizes -s 0.45 -e 4
 
 
+python plot.py -d $BENCH_RESULTS_DIR -a cga2opt -t pr1002 -c 1 2 4 8 --population-sizes 2 4 8 16 32 64 128 256 -p $PLOT_DIR -f pgf -k cores_diff_popsizes -s 0.8 -e 4
+
+
 # Skirtingų populiacijos dydžių palyginimas, kartos.
 
-python plot.py -d $BENCH_RESULTS_DIR -a cga2opt -t att532 pr1002 -c 8 --population-sizes 2 4 8 16 32 64 128 256 -e 4 -p $PLOT_DIR -f pgf -k gens_diff_popsizes -s 1.0
+python plot.py -d $BENCH_RESULTS_DIR -a cga2opt -t att532 pr1002 -c 8 --population-sizes 2 4 8 16 32 64 128 256 -e 4 -p $PLOT_DIR -f pgf -k gens_diff_popsizes -s 0.8
 
 
 # Geriausių individų apsikeitimo tarp branduolių santykinis laikas.
 
-python plot.py -d $BENCH_RESULTS_DIR -a cga2opt -t att532 pr1002 -p $PLOT_DIR -f pgf -k relative_times -s 1.0
+python plot.py -d $BENCH_RESULTS_DIR -a cga2opt -t att532 pr1002 -p $PLOT_DIR -f pgf -k relative_times -s 0.8
 
 
 # Kartų skaičiaus įtaka skirtingiems atvejams.
