@@ -77,6 +77,8 @@ GENS_STEP = 100
 # controls where in the plot the legend is placed
 PLOT_LEGEND_LOCATION = "upper right"
 
+DIFF = "percent"
+
 CORE_COUNT_AXIS_LABEL = "branduolių skaičius"
 DIFF_FROM_OPTIMAL_AXIS_LABEL = "skirtumas nuo optimalaus, $\%$"
 GENERATIONS_AXIS_LABEL = "genetinio algoritmo karta"
@@ -242,6 +244,11 @@ def main():
                         nargs="+",
                         required=False,
                         default=[128])
+    global DIFF
+    parser.add_argument("--diff-type",
+                        choices=["percent", "times"],
+                        required=False,
+                        default=DIFF)
     # what kind of plots to generate
     parser.add_argument("-k", "--plot-kinds",
                         choices=PLOT_KINDS,
@@ -287,6 +294,7 @@ def main():
     Y_BOTTOM = args.y_bottom
     GENS_START = args.gens_start
     GENS_STEP = args.gens_step
+    DIFF = args.diff_type
 
     algos = list(map(lambda x: ALGO_TO_FILE_NAME_PART[x], args.algorithms))
     core_counts = args.core_counts
@@ -446,6 +454,8 @@ def plot_and_save(x_values, y_values, labels, title, xlabel, ylabel, file_name, 
             "legend.handlelength": 1.2,
             "legend.frameon": False,
             "legend.shadow": False,
+            "legend.framealpha": 0.2,
+            "legend.facecolor": "grey",
             "legend.borderpad": 0.4,
             "legend.borderaxespad": 0.0,
             "axes.formatter.use_locale": True # use decimal separator ','
@@ -609,7 +619,10 @@ def plot_cores_diff_from_opt_generations(
         plot_file_name = f"cores_diff_from_opt_gens_{test_case}_{algo}_p{pop_size}"
     x_values = core_counts
     xlabel = CORE_COUNT_AXIS_LABEL
-    ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
+    if DIFF == "percent":
+        ylabel = DIFF_FROM_OPTIMAL_AXIS_LABEL
+    elif DIFF == "times":
+        ylabel = "skirtumas nuo optimalaus, kartai"
     parsed_files = []
     labels_all_gens_counts = []
     diffs_all_gens_counts = []
@@ -630,7 +643,10 @@ def plot_cores_diff_from_opt_generations(
                 for rec in r_group.records:
                     total += rec.lengths[g]
             avg = total / (r_group.record_count * required_exc_gens_count)
-            diff = percent_diff_from_optimal(avg, meta.optimal_length)
+            if DIFF == "percent":
+                diff = percent_diff_from_optimal(avg, meta.optimal_length)
+            elif DIFF == "times":
+                diff = avg / meta.optimal_length
             diffs_single_gens_count.append(diff)
         diffs_all_gens_counts.append(diffs_single_gens_count)
     
@@ -838,7 +854,7 @@ def plot_relative_times_for_tour_exchange(results_dir, add_title):
     labels = [
         "\\texttt{att532}",
         "\\texttt{gr666}",
-        "\\texttt{rata783}",
+        "\\texttt{rat783}",
         "\\texttt{pr1002}"
     ]
     

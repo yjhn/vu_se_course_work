@@ -62,11 +62,11 @@ python plot.py -d $BENCH_RESULTS_DIR -a cga2opt -t att532 pr1002 -c 8 --populati
 
 # Geriausių individų apsikeitimo tarp branduolių santykinis laikas.
 
-python plot.py -d $BENCH_RESULTS_DIR -a cga2opt -t att532 pr1002 -p $PLOT_DIR -f pgf -k relative_times -s 0.8
+python plot.py -d $BENCH_RESULTS_DIR -a cga2opt -p $PLOT_DIR -f pgf -k relative_times -s 0.8
 
 
 # Kartų skaičiaus įtaka skirtingiems atvejams.
 
-python plot.py -d ../all_bench_results -a cga2opt cga3opt -t att532 gr666 rat783 pr1002 -c 1 2 4 8 --population-sizes 128 -e 4 -p $PLOT_DIR -f pgf -k cores_diff_gens -s 0.45
+python plot.py -d $BENCH_RESULTS_DIR -a cga2opt cga3opt -t att532 gr666 rat783 pr1002 -c 1 2 4 8 --population-sizes 128 -e 4 -p $PLOT_DIR -f pgf -k cores_diff_gens -s 0.45
 
-#python plot.py -d ../all_bench_results -a cga -t att532 gr666 rat783 pr1002 -c 1 2 4 8 --population-sizes 128 -e 4 -p $PLOT_DIR -f pgf -k cores_diff_gens -s 0.45 --gens-start 19999 --gens-step 20000
+python plot.py -d ../cga_100000_gens -a cga -t att532 -c 1 2 4 --population-sizes 128 -e 4 -p $PLOT_DIR -f pgf -k cores_diff_gens -s 0.8 --gens-start 19999 --gens-step 20000 --diff-type times -g 100000
