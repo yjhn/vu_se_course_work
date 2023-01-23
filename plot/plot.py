@@ -74,6 +74,9 @@ ALGO_TO_FILE_NAME_PART = {
 GENS_START = 99
 GENS_STEP = 100
 
+# GENS_NAME = "k"
+GENS_NAME = "kartos"
+
 # controls where in the plot the legend is placed
 PLOT_LEGEND_LOCATION = "upper right"
 
@@ -612,7 +615,10 @@ def plot_cores_diff_from_opt_generations(
     add_title):
     
     if len(exc_gens) == 1:
-        title = f"{ALGO_DISPLAY_NAMES[algo]}, \\texttt{{{test_case}}}, $D_m = {exc_gens[0]}$, $P = {pop_size}$"
+        if GENS_NAME == "kartos":
+            title = f"{ALGO_DISPLAY_NAMES[algo]}, \\texttt{{{test_case}}}, $P = {pop_size}$"
+        elif GENS_NAME == "k":
+            title = f"{ALGO_DISPLAY_NAMES[algo]}, \\texttt{{{test_case}}}, $D_m = {exc_gens[0]}$, $P = {pop_size}$"
         plot_file_name = f"cores_diff_from_opt_gens_{test_case}_{algo}_egen_{exc_gens[0]}_p{pop_size}"
     else:
         title = f"{ALGO_DISPLAY_NAMES[algo]}, \\texttt{{{test_case}}}, $P = {pop_size}$"
@@ -628,7 +634,10 @@ def plot_cores_diff_from_opt_generations(
     diffs_all_gens_counts = []
     # TODO: include generation 0
     for g in range(GENS_START, max_gens, GENS_STEP):
-        labels_all_gens_counts.append(f"$K = {str(g + 1)}$")
+        if GENS_NAME == "k":
+            labels_all_gens_counts.append(f"$K = {str(g + 1)}$")
+        elif GENS_NAME == "kartos":
+            labels_all_gens_counts.append(f"${str(g + 1)}$ kart\\~{{ų}}")
         diffs_single_gens_count = []
         for c in core_counts:
             file_name = make_file_name(directory, test_case, algo, c, pop_size)
@@ -791,7 +800,10 @@ def plot_cores_diff_from_opt_pop_sizes(
     
     popstring = '_'.join(map(str, pop_sizes))
     if len(exc_gens) == 1:
-        title = f"{ALGO_DISPLAY_NAMES[algo]}, \\texttt{{{test_case}}}, $D_m = {exc_gens[0]}$, $K = {max_gens}$"
+        if GENS_NAME == "kartos":
+            title = f"{ALGO_DISPLAY_NAMES[algo]}, \\texttt{{{test_case}}}, ${max_gens}$ kart\\~{{ų}}"
+        elif GENS_NAME == "k":
+            title = f"{ALGO_DISPLAY_NAMES[algo]}, \\texttt{{{test_case}}}, $D_m = {exc_gens[0]}$, $K = {max_gens}$"
         plot_file_name = f"cores_diff_from_opt_pop_sizes_{test_case}_{algo}_mgen_{max_gens}_egen_{exc_gens[0]}_p{popstring}"
     else:
         title = f"{ALGO_DISPLAY_NAMES[algo]}, \\texttt{{{test_case}}}, $K = {max_gens}$"
